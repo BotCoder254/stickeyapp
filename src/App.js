@@ -1,25 +1,114 @@
-import logo from './logo.svg';
-import './App.css';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './hooks/useAuth';
+import LandingPage from './components/LandingPage';
+import Login from './components/Login';
+import SignUp from './components/SignUp';
+import ResetPassword from './components/ResetPassword';
+import Dashboard from './components/Dashboard/Dashboard';
+import AuthLayout from './layouts/AuthLayout';
+import MainLayout from './layouts/MainLayout';
 
-function App() {
+const PrivateRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  return user ? children : <Navigate to="/login" />;
+};
+
+const PublicRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  return !user ? children : <Navigate to="/dashboard" />;
+};
+
+const App = () => {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <AuthProvider>
+        <Routes>
+          {/* Public Routes */}
+          <Route
+            path="/"
+            element={
+              <MainLayout>
+                <LandingPage />
+              </MainLayout>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <MainLayout>
+                  <AuthLayout>
+                    <Login />
+                  </AuthLayout>
+                </MainLayout>
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/signup"
+            element={
+              <PublicRoute>
+                <MainLayout>
+                  <AuthLayout>
+                    <SignUp />
+                  </AuthLayout>
+                </MainLayout>
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/reset-password"
+            element={
+              <PublicRoute>
+                <MainLayout>
+                  <AuthLayout>
+                    <ResetPassword />
+                  </AuthLayout>
+                </MainLayout>
+              </PublicRoute>
+            }
+          />
+
+          {/* Private Routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <PrivateRoute>
+                <MainLayout>
+                  <Dashboard />
+                </MainLayout>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Catch all route */}
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </AuthProvider>
+    </Router>
   );
-}
+};
 
 export default App;
