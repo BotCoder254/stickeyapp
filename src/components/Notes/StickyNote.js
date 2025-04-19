@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiEdit2, FiTrash2, FiCheck, FiX, FiCalendar, FiClock, FiHash, FiPaperclip, FiStar, FiAlertCircle, FiLock, FiImage, FiMoreVertical, FiArchive, FiShare2, FiCopy, FiTag, FiBookmark, FiFlag, FiType, FiAlignLeft } from 'react-icons/fi';
+import { FiEdit2, FiTrash2, FiCheck, FiX, FiCalendar, FiClock, FiHash, FiPaperclip, FiStar, FiAlertCircle, FiLock, FiImage, FiMoreVertical, FiArchive, FiShare2, FiCopy, FiTag, FiBookmark, FiFlag, FiType, FiAlignLeft, FiMic, FiFile, FiUpload, FiPlay, FiPause, FiDownload } from 'react-icons/fi';
 
 const colorClasses = {
   yellow: 'bg-yellow-200',
@@ -30,7 +30,29 @@ const fontSizes = {
   xl: 'text-xl'
 };
 
-const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare, isListView = false, index }) => {
+const AudioWaveform = ({ isRecording }) => {
+  return (
+    <div className="flex items-center gap-1 h-8">
+      {[...Array(8)].map((_, i) => (
+        <motion.div
+          key={i}
+          className="w-1 bg-red-500 rounded-full"
+          animate={{
+            height: isRecording ? [8, 24, 8] : 8
+          }}
+          transition={{
+            duration: 0.5,
+            repeat: Infinity,
+            repeatType: "reverse",
+            delay: i * 0.1
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare, onFileUpload, onDeleteFile, onAudioRecord, isListView = false, index }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [title, setTitle] = useState(note.title);
@@ -54,6 +76,13 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
   const fileInputRef = useRef(null);
   const settingsRef = useRef(null);
   const menuTimeoutRef = useRef(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState({});
+  const mediaRecorderRef = useRef(null);
+  const audioPlayersRef = useRef({});
+  const timerRef = useRef(null);
+  const dropZoneRef = useRef(null);
 
   useEffect(() => {
     const extractedTags = content.match(/#\w+/g) || [];
@@ -76,6 +105,19 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (isRecording) {
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(timerRef.current);
+      setRecordingTime(0);
+    }
+
+    return () => clearInterval(timerRef.current);
+  }, [isRecording]);
 
   const openSettingsMenu = () => {
     if (menuTimeoutRef.current) {
@@ -182,6 +224,83 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
   const handleArchive = () => {
     setShowSettings(false);
     onArchive(note);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZoneRef.current?.classList.add('border-primary');
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZoneRef.current?.classList.remove('border-primary');
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZoneRef.current?.classList.remove('border-primary');
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      const uploadedFiles = await onFileUpload(files, note.id);
+      if (uploadedFiles.length > 0) {
+        onUpdate({
+          ...note,
+          attachments: [...(note.attachments || []), ...uploadedFiles]
+        });
+      }
+    }
+  };
+
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      const uploadedFiles = await onFileUpload(files, note.id);
+      if (uploadedFiles.length > 0) {
+        onUpdate({
+          ...note,
+          attachments: [...(note.attachments || []), ...uploadedFiles]
+        });
+      }
+    }
+  };
+
+  const startRecording = async () => {
+    const mediaRecorder = await onAudioRecord(note.id);
+    if (mediaRecorder) {
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const toggleAudioPlayback = (audioUrl) => {
+    if (!audioPlayersRef.current[audioUrl]) {
+      const audio = new Audio(audioUrl);
+      audioPlayersRef.current[audioUrl] = audio;
+      audio.addEventListener('ended', () => {
+        setIsPlaying(prev => ({ ...prev, [audioUrl]: false }));
+      });
+    }
+
+    const audio = audioPlayersRef.current[audioUrl];
+    if (isPlaying[audioUrl]) {
+      audio.pause();
+      setIsPlaying(prev => ({ ...prev, [audioUrl]: false }));
+    } else {
+      audio.play();
+      setIsPlaying(prev => ({ ...prev, [audioUrl]: true }));
+    }
   };
 
   const SettingsMenu = () => (
@@ -429,8 +548,119 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
             </div>
           )}
         </div>
+
+        {/* Attachments */}
+        <AttachmentsSection />
       </div>
     </motion.div>
+  );
+
+  const AttachmentsSection = () => (
+    <div className="border-t border-gray-100 pt-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium">Attachments</span>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            multiple
+            className="hidden"
+          />
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => fileInputRef.current?.click()}
+            className="p-1.5 rounded-lg hover:bg-gray-100"
+          >
+            <FiUpload className="w-4 h-4" />
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={isRecording ? stopRecording : startRecording}
+            className={`p-1.5 rounded-lg flex items-center gap-2 ${
+              isRecording ? 'bg-red-100 text-red-600' : 'hover:bg-gray-100'
+            }`}
+          >
+            <FiMic className="w-4 h-4" />
+            {isRecording && (
+              <>
+                <AudioWaveform isRecording={isRecording} />
+                <span className="text-sm">{recordingTime}s</span>
+              </>
+            )}
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Drag and Drop Zone */}
+      <div
+        ref={dropZoneRef}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className="border-2 border-dashed border-gray-200 rounded-lg p-4 mb-2 transition-colors"
+      >
+        <div className="text-center text-sm text-gray-500">
+          Drag and drop files here
+        </div>
+      </div>
+
+      {/* Attachments Grid */}
+      {note.attachments && note.attachments.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {note.attachments.map((attachment, index) => (
+            <div key={index} className="relative group">
+              {attachment.type.startsWith('image/') ? (
+                <img
+                  src={attachment.url}
+                  alt={attachment.name}
+                  className="w-full h-24 object-cover rounded-lg"
+                />
+              ) : attachment.type.startsWith('audio/') ? (
+                <div className="flex items-center justify-center h-24 bg-gray-100 rounded-lg">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => toggleAudioPlayback(attachment.url)}
+                    className="p-2 rounded-full bg-white shadow-md"
+                  >
+                    {isPlaying[attachment.url] ? (
+                      <FiPause className="w-6 h-6 text-primary" />
+                    ) : (
+                      <FiPlay className="w-6 h-6 text-primary" />
+                    )}
+                  </motion.button>
+                  {isPlaying[attachment.url] && <AudioWaveform isRecording={true} />}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-24 bg-gray-100 rounded-lg">
+                  <FiFile className="w-8 h-8 text-gray-400" />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center space-x-2">
+                <motion.a
+                  whileTap={{ scale: 0.95 }}
+                  href={attachment.url}
+                  download={attachment.name}
+                  className="p-1.5 rounded-full bg-white text-primary"
+                >
+                  <FiDownload className="w-4 h-4" />
+                </motion.a>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => onDeleteFile(attachment.url, note.id)}
+                  className="p-1.5 rounded-full bg-white text-red-500"
+                >
+                  <FiTrash2 className="w-4 h-4" />
+                </motion.button>
+              </div>
+              <div className="text-xs text-gray-500 mt-1 truncate">
+                {attachment.name}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 
   if (isListView) {
@@ -718,6 +948,8 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
           </div>
         </>
       )}
+      
+      {isEditing && <AttachmentsSection />}
     </motion.div>
   );
 };

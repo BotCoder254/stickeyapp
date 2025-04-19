@@ -1,29 +1,47 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { FiPlus, FiGrid, FiList, FiPieChart, FiBarChart2, FiClock, FiStar, FiTag, FiFilter, FiArchive } from 'react-icons/fi';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { FiPlus, FiGrid, FiList, FiPieChart, FiBarChart2, FiClock, FiStar, FiTag, FiFilter, FiArchive, FiBookmark, FiTrendingUp } from 'react-icons/fi';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import { db } from '../../config/firebase';
+import { db, storage } from '../../config/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import AuthNav from '../Navigation/AuthNav';
 import StickyNote from '../Notes/StickyNote';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+
+const COLORS = ['#3A59D1', '#3D90D7', '#7AC6D2', '#B5FCCD'];
 
 const Dashboard = () => {
   const [notes, setNotes] = useState([]);
   const [archivedNotes, setArchivedNotes] = useState([]);
+  const [bookmarkedNotes, setBookmarkedNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid');
   const [filterColor, setFilterColor] = useState('all');
   const [sortBy, setSortBy] = useState('updated'); // 'updated', 'created', 'color'
   const [showArchived, setShowArchived] = useState(false);
+  const [showBookmarked, setShowBookmarked] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     archived: 0,
+    bookmarked: 0,
     byColor: {},
     recentlyUpdated: [],
     averageLength: 0,
     activityByDay: {},
-    tags: []
+    tags: [],
+    categoryDistribution: [],
+    weeklyActivity: [],
+    attachmentStats: {
+      images: 0,
+      audio: 0,
+      files: 0
+    },
+    priorityDistribution: [],
+    completionRate: 0,
+    mostActiveHours: []
   });
   const { user } = useAuth();
 
@@ -41,13 +59,15 @@ const Dashboard = () => {
         ...doc.data()
       }));
 
-      // Separate active and archived notes
+      // Separate notes by type
       const active = allNotes.filter(note => !note.isArchived);
       const archived = allNotes.filter(note => note.isArchived);
+      const bookmarked = allNotes.filter(note => note.isBookmarked);
 
       // Apply sorting
       const sortedActive = sortNotes(active, sortBy);
       const sortedArchived = sortNotes(archived, sortBy);
+      const sortedBookmarked = sortNotes(bookmarked, sortBy);
       
       // Apply color filter if needed
       const filteredActive = filterColor !== 'all' 
@@ -58,8 +78,13 @@ const Dashboard = () => {
         ? sortedArchived.filter(note => note.color === filterColor)
         : sortedArchived;
 
+      const filteredBookmarked = filterColor !== 'all'
+        ? sortedBookmarked.filter(note => note.color === filterColor)
+        : sortedBookmarked;
+
       setNotes(filteredActive);
       setArchivedNotes(filteredArchived);
+      setBookmarkedNotes(filteredBookmarked);
       
       // Calculate enhanced statistics
       calculateStats([...active, ...archived]);
@@ -71,35 +96,87 @@ const Dashboard = () => {
   const calculateStats = (notesData) => {
     const totalNotes = notesData.length;
     const archivedCount = notesData.filter(note => note.isArchived).length;
+    const bookmarkedCount = notesData.filter(note => note.isBookmarked).length;
+    
+    // Color distribution
     const colorCount = notesData.reduce((acc, note) => {
       acc[note.color] = (acc[note.color] || 0) + 1;
       return acc;
     }, {});
 
-    // Calculate activity by day
+    // Activity by day
     const activityByDay = notesData.reduce((acc, note) => {
       const date = note.updatedAt?.toDate?.()?.toLocaleDateString() || new Date().toLocaleDateString();
       acc[date] = (acc[date] || 0) + 1;
       return acc;
     }, {});
 
-    // Extract and count tags
-    const tags = notesData.reduce((acc, note) => {
-      const noteTags = note.content?.match(/#\w+/g) || [];
-      noteTags.forEach(tag => {
-        if (!acc.includes(tag)) acc.push(tag);
+    // Weekly activity data
+    const weeklyActivity = Object.entries(activityByDay)
+      .slice(-7)
+      .map(([date, count]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
+        count
+      }));
+
+    // Category/Tag distribution
+    const categoryDistribution = notesData.reduce((acc, note) => {
+      const tags = note.content?.match(/#\w+/g) || [];
+      tags.forEach(tag => {
+        const category = acc.find(c => c.name === tag);
+        if (category) {
+          category.value++;
+        } else {
+          acc.push({ name: tag, value: 1 });
+        }
       });
       return acc;
     }, []);
 
+    // Attachment statistics
+    const attachmentStats = notesData.reduce((acc, note) => {
+      note.attachments?.forEach(attachment => {
+        if (attachment.type.startsWith('image/')) acc.images++;
+        else if (attachment.type.startsWith('audio/')) acc.audio++;
+        else acc.files++;
+      });
+      return acc;
+    }, { images: 0, audio: 0, files: 0 });
+
+    // Priority distribution
+    const priorityDistribution = notesData.reduce((acc, note) => {
+      const priority = note.priority || 'normal';
+      acc[priority] = (acc[priority] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Most active hours
+    const mostActiveHours = notesData.reduce((acc, note) => {
+      const hour = note.updatedAt?.toDate?.()?.getHours() || 0;
+      acc[hour] = (acc[hour] || 0) + 1;
+      return acc;
+    }, {});
+
     setStats({
       total: totalNotes,
       archived: archivedCount,
+      bookmarked: bookmarkedCount,
       byColor: colorCount,
       recentlyUpdated: notesData.filter(note => !note.isArchived).slice(0, 5),
       averageLength: Math.round(notesData.reduce((acc, note) => acc + (note.content?.length || 0), 0) / (totalNotes || 1)),
       activityByDay,
-      tags
+      tags: categoryDistribution.map(c => c.name),
+      categoryDistribution,
+      weeklyActivity,
+      attachmentStats,
+      priorityDistribution: Object.entries(priorityDistribution).map(([name, value]) => ({ name, value })),
+      mostActiveHours: Object.entries(mostActiveHours)
+        .map(([hour, count]) => ({
+          hour: `${hour}:00`,
+          count
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
     });
 
     setLoading(false);
@@ -118,6 +195,103 @@ const Dashboard = () => {
     }
   };
 
+  const handleFileUpload = async (files, noteId) => {
+    try {
+      const uploadPromises = Array.from(files).map(async (file) => {
+        const storageRef = ref(storage, `users/${user.uid}/notes/${noteId}/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+        return {
+          name: file.name,
+          url: downloadURL,
+          type: file.type,
+          size: file.size,
+          timestamp: new Date().toISOString(),
+          path: storageRef.fullPath
+        };
+      });
+
+      const uploadedFiles = await Promise.all(uploadPromises);
+      return uploadedFiles;
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      return [];
+    }
+  };
+
+  const handleDeleteFile = async (fileUrl, noteId) => {
+    try {
+      const note = notes.find(n => n.id === noteId) || archivedNotes.find(n => n.id === noteId);
+      const attachment = note?.attachments?.find(a => a.url === fileUrl);
+      
+      if (attachment?.path) {
+        const fileRef = ref(storage, attachment.path);
+        await deleteObject(fileRef);
+      }
+      
+      const noteRef = doc(db, 'notes', noteId);
+      if (note) {
+        const updatedAttachments = note.attachments.filter(a => a.url !== fileUrl);
+        await updateDoc(noteRef, { attachments: updatedAttachments });
+      }
+    } catch (error) {
+      console.error('Error deleting file:', error);
+    }
+  };
+
+  const handleAudioRecording = async (noteId) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const audioChunks = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunks.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+        const file = new File([audioBlob], `recording-${Date.now()}.mp3`, { type: 'audio/mp3' });
+        
+        const uploadedFiles = await handleFileUpload([file], noteId);
+        if (uploadedFiles.length > 0) {
+          const noteRef = doc(db, 'notes', noteId);
+          const note = notes.find(n => n.id === noteId) || archivedNotes.find(n => n.id === noteId);
+          
+          if (note) {
+            const updatedAttachments = [...(note.attachments || []), ...uploadedFiles];
+            await updateDoc(noteRef, { attachments: updatedAttachments });
+          }
+        }
+      };
+
+      return mediaRecorder;
+    } catch (error) {
+      console.error('Error starting audio recording:', error);
+      return null;
+    }
+  };
+
+  const handleUpdateNote = async (updatedNote) => {
+    try {
+      const noteRef = doc(db, 'notes', updatedNote.id);
+      
+      // Handle file attachments if present
+      if (updatedNote.newFiles && updatedNote.newFiles.length > 0) {
+        const uploadedFiles = await handleFileUpload(updatedNote.newFiles, updatedNote.id);
+        updatedNote.attachments = [...(updatedNote.attachments || []), ...uploadedFiles];
+        delete updatedNote.newFiles;
+      }
+
+      await updateDoc(noteRef, {
+        ...updatedNote,
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      console.error('Error updating note:', error);
+    }
+  };
+
   const handleAddNote = async () => {
     try {
       const newNote = {
@@ -126,6 +300,7 @@ const Dashboard = () => {
         content: '',
         color: 'yellow',
         isArchived: false,
+        attachments: [],
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -133,18 +308,6 @@ const Dashboard = () => {
       await addDoc(collection(db, 'notes'), newNote);
     } catch (error) {
       console.error('Error adding note:', error);
-    }
-  };
-
-  const handleUpdateNote = async (updatedNote) => {
-    try {
-      const noteRef = doc(db, 'notes', updatedNote.id);
-      await updateDoc(noteRef, {
-        ...updatedNote,
-        updatedAt: new Date()
-      });
-    } catch (error) {
-      console.error('Error updating note:', error);
     }
   };
 
@@ -210,6 +373,119 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gray-50">
       <AuthNav />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Analytics Toggle */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowAnalytics(!showAnalytics)}
+          className={`mb-8 flex items-center gap-2 px-4 py-2 rounded-lg ${
+            showAnalytics ? 'bg-primary text-white' : 'bg-white text-primary'
+          } shadow-lg`}
+        >
+          <FiTrendingUp className="w-5 h-5" />
+          <span>{showAnalytics ? 'Hide Analytics' : 'Show Analytics'}</span>
+        </motion.button>
+
+        {/* Analytics Dashboard */}
+        <AnimatePresence>
+          {showAnalytics && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6"
+            >
+              {/* Weekly Activity Chart */}
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                className="bg-white p-6 rounded-lg shadow-lg"
+              >
+                <h3 className="text-lg font-semibold mb-4">Weekly Activity</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={stats.weeklyActivity}>
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#3A59D1" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </motion.div>
+
+              {/* Category Distribution */}
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                className="bg-white p-6 rounded-lg shadow-lg"
+              >
+                <h3 className="text-lg font-semibold mb-4">Category Distribution</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={stats.categoryDistribution}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      label
+                    >
+                      {stats.categoryDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </motion.div>
+
+              {/* Attachment Statistics */}
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                className="bg-white p-6 rounded-lg shadow-lg"
+              >
+                <h3 className="text-lg font-semibold mb-4">Attachments Overview</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-primary">{stats.attachmentStats.images}</p>
+                    <p className="text-sm text-gray-600">Images</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-secondary">{stats.attachmentStats.audio}</p>
+                    <p className="text-sm text-gray-600">Audio</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-accent">{stats.attachmentStats.files}</p>
+                    <p className="text-sm text-gray-600">Files</p>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Most Active Hours */}
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                className="bg-white p-6 rounded-lg shadow-lg"
+              >
+                <h3 className="text-lg font-semibold mb-4">Most Active Hours</h3>
+                <div className="space-y-2">
+                  {stats.mostActiveHours.map(({ hour, count }) => (
+                    <div key={hour} className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">{hour}</span>
+                      <div className="flex-grow bg-gray-100 rounded-full h-2">
+                        <div
+                          className="bg-primary rounded-full h-2"
+                          style={{
+                            width: `${(count / Math.max(...stats.mostActiveHours.map(h => h.count))) * 100}%`
+                          }}
+                        />
+                      </div>
+                      <span className="text-sm text-gray-600">{count} notes</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Statistics Section */}
         <div className="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <motion.div
@@ -239,16 +515,10 @@ const Dashboard = () => {
             className="bg-white p-6 rounded-lg shadow-lg"
           >
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold">Popular Tags</h3>
-              <FiTag className="w-5 h-5 text-accent" />
+              <h3 className="text-lg font-semibold">Bookmarked</h3>
+              <FiBookmark className="w-5 h-5 text-accent" />
             </div>
-            <div className="flex flex-wrap gap-2">
-              {stats.tags.slice(0, 3).map(tag => (
-                <span key={tag} className="px-2 py-1 bg-accent/10 text-accent rounded-full text-sm">
-                  {tag}
-                </span>
-              ))}
-            </div>
+            <p className="text-3xl font-bold text-accent">{stats.bookmarked}</p>
           </motion.div>
 
           <motion.div
@@ -316,18 +586,33 @@ const Dashboard = () => {
             </select>
           </div>
 
-          {/* Archive Toggle */}
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowArchived(!showArchived)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-              showArchived ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-600'
-            }`}
-          >
-            <FiArchive className="w-5 h-5" />
-            <span>{showArchived ? 'Show Active' : 'Show Archived'}</span>
-          </motion.button>
+          <div className="flex gap-2">
+            {/* Bookmarked Toggle */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowBookmarked(!showBookmarked)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                showBookmarked ? 'bg-accent text-white' : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              <FiBookmark className="w-5 h-5" />
+              <span>{showBookmarked ? 'Show All' : 'Bookmarked'}</span>
+            </motion.button>
+
+            {/* Archive Toggle */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowArchived(!showArchived)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                showArchived ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              <FiArchive className="w-5 h-5" />
+              <span>{showArchived ? 'Show Active' : 'Archived'}</span>
+            </motion.button>
+          </div>
         </div>
 
         {/* Notes Grid/List */}
@@ -336,7 +621,7 @@ const Dashboard = () => {
           : "space-y-4"
         }>
           <AnimatePresence>
-            {(showArchived ? archivedNotes : notes).map((note, index) => (
+            {(showArchived ? archivedNotes : showBookmarked ? bookmarkedNotes : notes).map((note, index) => (
               <motion.div
                 key={note.id}
                 layout
@@ -352,6 +637,9 @@ const Dashboard = () => {
                   onArchive={handleArchiveNote}
                   onDuplicate={handleDuplicateNote}
                   onShare={handleShareNote}
+                  onFileUpload={handleFileUpload}
+                  onDeleteFile={handleDeleteFile}
+                  onAudioRecord={handleAudioRecording}
                   isListView={viewMode === 'list'}
                 />
               </motion.div>
@@ -359,7 +647,7 @@ const Dashboard = () => {
           </AnimatePresence>
         </div>
 
-        {!showArchived && (
+        {!showArchived && !showBookmarked && (
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
