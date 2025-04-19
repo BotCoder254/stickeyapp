@@ -1167,8 +1167,14 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                 ))}
               </div>
             )}
-            {(tags.length > 0 || labels.length > 0) && (
+            {(tags.length > 0 || labels.length > 0 || currentGroup) && (
               <div className="flex flex-wrap gap-1 mb-2">
+                {currentGroup && (
+                  <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <FiUsers className="w-3 h-3" />
+                    {currentGroup.name}
+                  </span>
+                )}
                 {tags.map((tag, index) => (
                   <span key={`tag-${index}`} className="text-xs bg-white/50 px-1.5 py-0.5 rounded-full">
                     {tag}
