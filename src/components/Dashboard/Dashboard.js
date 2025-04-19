@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { FiPlus, FiGrid, FiList, FiPieChart, FiBarChart2, FiClock, FiStar, FiTag, FiFilter } from 'react-icons/fi';
+import { FiPlus, FiGrid, FiList, FiPieChart, FiBarChart2, FiClock, FiStar, FiTag, FiFilter, FiArchive } from 'react-icons/fi';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../hooks/useAuth';
@@ -10,12 +10,15 @@ import StickyNote from '../Notes/StickyNote';
 
 const Dashboard = () => {
   const [notes, setNotes] = useState([]);
+  const [archivedNotes, setArchivedNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid');
   const [filterColor, setFilterColor] = useState('all');
   const [sortBy, setSortBy] = useState('updated'); // 'updated', 'created', 'color'
+  const [showArchived, setShowArchived] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
+    archived: 0,
     byColor: {},
     recentlyUpdated: [],
     averageLength: 0,
@@ -33,23 +36,33 @@ const Dashboard = () => {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      let notesData = snapshot.docs.map(doc => ({
+      let allNotes = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
 
-      // Apply sorting
-      notesData = sortNotes(notesData, sortBy);
-      
-      // Apply color filter
-      if (filterColor !== 'all') {
-        notesData = notesData.filter(note => note.color === filterColor);
-      }
+      // Separate active and archived notes
+      const active = allNotes.filter(note => !note.isArchived);
+      const archived = allNotes.filter(note => note.isArchived);
 
-      setNotes(notesData);
+      // Apply sorting
+      const sortedActive = sortNotes(active, sortBy);
+      const sortedArchived = sortNotes(archived, sortBy);
+      
+      // Apply color filter if needed
+      const filteredActive = filterColor !== 'all' 
+        ? sortedActive.filter(note => note.color === filterColor)
+        : sortedActive;
+      
+      const filteredArchived = filterColor !== 'all'
+        ? sortedArchived.filter(note => note.color === filterColor)
+        : sortedArchived;
+
+      setNotes(filteredActive);
+      setArchivedNotes(filteredArchived);
       
       // Calculate enhanced statistics
-      calculateStats(notesData);
+      calculateStats([...active, ...archived]);
     });
 
     return () => unsubscribe();
@@ -57,6 +70,7 @@ const Dashboard = () => {
 
   const calculateStats = (notesData) => {
     const totalNotes = notesData.length;
+    const archivedCount = notesData.filter(note => note.isArchived).length;
     const colorCount = notesData.reduce((acc, note) => {
       acc[note.color] = (acc[note.color] || 0) + 1;
       return acc;
@@ -80,8 +94,9 @@ const Dashboard = () => {
 
     setStats({
       total: totalNotes,
+      archived: archivedCount,
       byColor: colorCount,
-      recentlyUpdated: notesData.slice(0, 5),
+      recentlyUpdated: notesData.filter(note => !note.isArchived).slice(0, 5),
       averageLength: Math.round(notesData.reduce((acc, note) => acc + (note.content?.length || 0), 0) / (totalNotes || 1)),
       activityByDay,
       tags
@@ -110,6 +125,7 @@ const Dashboard = () => {
         title: 'New Note',
         content: '',
         color: 'yellow',
+        isArchived: false,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -124,13 +140,23 @@ const Dashboard = () => {
     try {
       const noteRef = doc(db, 'notes', updatedNote.id);
       await updateDoc(noteRef, {
-        title: updatedNote.title,
-        content: updatedNote.content,
-        color: updatedNote.color,
+        ...updatedNote,
         updatedAt: new Date()
       });
     } catch (error) {
       console.error('Error updating note:', error);
+    }
+  };
+
+  const handleArchiveNote = async (note) => {
+    try {
+      const noteRef = doc(db, 'notes', note.id);
+      await updateDoc(noteRef, {
+        isArchived: !note.isArchived,
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      console.error('Error archiving note:', error);
     }
   };
 
@@ -164,10 +190,10 @@ const Dashboard = () => {
             className="bg-white p-6 rounded-lg shadow-lg"
           >
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold">Total Notes</h3>
+              <h3 className="text-lg font-semibold">Active Notes</h3>
               <FiStar className="w-5 h-5 text-primary" />
             </div>
-            <p className="text-3xl font-bold text-primary">{stats.total}</p>
+            <p className="text-3xl font-bold text-primary">{stats.total - stats.archived}</p>
           </motion.div>
           
           <motion.div
@@ -175,10 +201,10 @@ const Dashboard = () => {
             className="bg-white p-6 rounded-lg shadow-lg"
           >
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold">Average Length</h3>
-              <FiBarChart2 className="w-5 h-5 text-secondary" />
+              <h3 className="text-lg font-semibold">Archived Notes</h3>
+              <FiArchive className="w-5 h-5 text-secondary" />
             </div>
-            <p className="text-3xl font-bold text-secondary">{stats.averageLength}</p>
+            <p className="text-3xl font-bold text-secondary">{stats.archived}</p>
           </motion.div>
 
           <motion.div
@@ -262,6 +288,19 @@ const Dashboard = () => {
               ))}
             </select>
           </div>
+
+          {/* Archive Toggle */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowArchived(!showArchived)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+              showArchived ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            <FiArchive className="w-5 h-5" />
+            <span>{showArchived ? 'Show Active' : 'Show Archived'}</span>
+          </motion.button>
         </div>
 
         {/* Notes Grid/List */}
@@ -270,7 +309,7 @@ const Dashboard = () => {
           : "space-y-4"
         }>
           <AnimatePresence>
-            {notes.map((note, index) => (
+            {(showArchived ? archivedNotes : notes).map((note, index) => (
               <motion.div
                 key={note.id}
                 layout
@@ -283,6 +322,7 @@ const Dashboard = () => {
                   note={note}
                   onUpdate={handleUpdateNote}
                   onDelete={handleDeleteNote}
+                  onArchive={handleArchiveNote}
                   isListView={viewMode === 'list'}
                 />
               </motion.div>
@@ -290,14 +330,16 @@ const Dashboard = () => {
           </AnimatePresence>
         </div>
 
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={handleAddNote}
-          className="fixed bottom-8 right-8 p-4 rounded-full bg-primary text-white shadow-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-        >
-          <FiPlus className="w-6 h-6" />
-        </motion.button>
+        {!showArchived && (
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={handleAddNote}
+            className="fixed bottom-8 right-8 p-4 rounded-full bg-primary text-white shadow-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+          >
+            <FiPlus className="w-6 h-6" />
+          </motion.button>
+        )}
       </div>
     </div>
   );

@@ -30,7 +30,7 @@ const fontSizes = {
   xl: 'text-xl'
 };
 
-const StickyNote = ({ note, onUpdate, onDelete, onDuplicate, onArchive, onShare, isListView = false, index }) => {
+const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare, isListView = false, index }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [title, setTitle] = useState(note.title);
@@ -177,6 +177,11 @@ const StickyNote = ({ note, onUpdate, onDelete, onDuplicate, onArchive, onShare,
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleArchive = () => {
+    setShowSettings(false);
+    onArchive(note);
   };
 
   const SettingsMenu = () => (
@@ -366,14 +371,13 @@ const StickyNote = ({ note, onUpdate, onDelete, onDuplicate, onArchive, onShare,
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                setIsArchived(!isArchived);
-                onArchive(note);
-              }}
-              className="p-2 rounded-lg flex items-center gap-2 hover:bg-gray-100"
+              onClick={handleArchive}
+              className={`p-2 rounded-lg flex items-center gap-2 ${
+                note.isArchived ? 'bg-secondary/10 text-secondary' : 'hover:bg-gray-100'
+              }`}
             >
               <FiArchive className="w-4 h-4" />
-              <span className="text-sm">Archive</span>
+              <span className="text-sm">{note.isArchived ? 'Restore' : 'Archive'}</span>
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.95 }}
@@ -437,7 +441,9 @@ const StickyNote = ({ note, onUpdate, onDelete, onDuplicate, onArchive, onShare,
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         whileHover={{ scale: 1.02 }}
-        className={`${colorClasses[color]} rounded-lg shadow-lg p-4 flex items-center justify-between ${isPinned ? 'ring-2 ring-primary' : ''}`}
+        className={`${colorClasses[color]} rounded-lg shadow-lg p-4 flex items-center justify-between ${
+          isPinned ? 'ring-2 ring-primary' : ''
+        } ${note.isArchived ? 'opacity-75' : ''}`}
       >
         <div className="flex-grow">
           <div className="flex items-center gap-2 mb-1">
@@ -492,6 +498,14 @@ const StickyNote = ({ note, onUpdate, onDelete, onDuplicate, onArchive, onShare,
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
+            onClick={handleArchive}
+            className="p-2 rounded-full hover:bg-white/20"
+          >
+            <FiArchive className="w-5 h-5" />
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
             onClick={() => onDelete(note.id)}
             className="p-2 rounded-full hover:bg-white/20"
             disabled={isLocked}
@@ -512,7 +526,7 @@ const StickyNote = ({ note, onUpdate, onDelete, onDuplicate, onArchive, onShare,
       whileHover={{ scale: 1.02 }}
       className={`${colorClasses[color]} rounded-lg shadow-lg p-4 relative min-h-[200px] flex flex-col ${
         isPinned ? 'ring-2 ring-primary' : ''
-      } ${isArchived ? 'opacity-75' : ''}`}
+      } ${note.isArchived ? 'opacity-75' : ''}`}
     >
       {isEditing ? (
         <>
