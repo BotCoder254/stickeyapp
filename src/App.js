@@ -5,8 +5,17 @@ import Login from './components/Login';
 import SignUp from './components/SignUp';
 import ResetPassword from './components/ResetPassword';
 import Dashboard from './components/Dashboard/Dashboard';
+import AdminDashboard from './components/Admin/AdminDashboard';
+import UserManagement from './components/Admin/UserManagement';
+import FlaggedNotes from './components/Admin/FlaggedNotes';
+import ContentModeration from './components/Admin/ContentModeration';
+import BackupRestore from './components/Admin/BackupRestore';
+import SystemLogs from './components/Admin/SystemLogs';
+import AdminRoute from './components/Admin/AdminRoute';
+import SharedNote from './components/Notes/SharedNote';
 import AuthLayout from './layouts/AuthLayout';
 import MainLayout from './layouts/MainLayout';
+import AdminLayout from './layouts/AdminLayout';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -28,11 +37,11 @@ const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
+  return (
       <MainLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-        </div>
+    </div>
       </MainLayout>
     );
   }
@@ -100,6 +109,128 @@ const App = () => {
                   <Dashboard />
                 </MainLayout>
               </PrivateRoute>
+            }
+          />
+
+          {/* Admin Routes */}
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <AdminDashboard />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <UserManagement />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/analytics"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <AdminDashboard />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/flagged"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <FlaggedNotes />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/moderation"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <ContentModeration />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/logs"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <AdminDashboard />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/reports"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <AdminDashboard />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/settings"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <AdminDashboard />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/help"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <AdminDashboard />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/backup"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <BackupRestore />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/system-logs"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <SystemLogs />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+
+          {/* Shared Note Route */}
+          <Route
+            path="/share/:shareId"
+            element={
+              <MainLayout>
+                <SharedNote />
+              </MainLayout>
             }
           />
 

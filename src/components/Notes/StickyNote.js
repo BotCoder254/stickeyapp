@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiEdit2, FiTrash2, FiCheck, FiX, FiCalendar, FiClock, FiHash, FiPaperclip, FiStar, FiAlertCircle, FiLock, FiImage, FiMoreVertical, FiArchive, FiShare2, FiCopy, FiTag, FiBookmark, FiFlag, FiType, FiAlignLeft, FiMic, FiFile, FiUpload, FiPlay, FiPause, FiDownload } from 'react-icons/fi';
+import toast from 'react-hot-toast';
 
 const colorClasses = {
   yellow: 'bg-yellow-200',
@@ -52,7 +53,7 @@ const AudioWaveform = ({ isRecording }) => {
   );
 };
 
-const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare, onFileUpload, onDeleteFile, onAudioRecord, onBookmark, isListView = false, index }) => {
+const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare, onFileUpload, onDeleteFile, onAudioRecord, onBookmark, onFlag, isListView = false, index }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [title, setTitle] = useState(note.title);
@@ -83,6 +84,8 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
   const audioPlayersRef = useRef({});
   const timerRef = useRef(null);
   const dropZoneRef = useRef(null);
+  const [showFlagModal, setShowFlagModal] = useState(false);
+  const [flagReason, setFlagReason] = useState('');
 
   useEffect(() => {
     const extractedTags = content.match(/#\w+/g) || [];
@@ -308,257 +311,320 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
     onBookmark(note);
   };
 
-  const SettingsMenu = () => (
-    <motion.div
-      ref={settingsRef}
-      initial={{ opacity: 0, scale: 0.95, y: -10 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-      transition={{ duration: 0.2 }}
-      className="absolute top-12 right-0 bg-white rounded-lg shadow-lg p-4 z-10 min-w-[250px]"
-    >
-      <div className="space-y-4">
-        {/* Text Styling */}
-        <div className="space-y-3">
-          <span className="text-sm font-medium block">Text Style</span>
-          <div className="grid grid-cols-2 gap-2">
-            <select
-              value={fontFamily}
-              onChange={(e) => setFontFamily(e.target.value)}
-              className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-            >
-              <option value="sans">Sans-serif</option>
-              <option value="serif">Serif</option>
-              <option value="mono">Monospace</option>
-              <option value="cursive">Cursive</option>
-              <option value="handwritten">Handwritten</option>
-            </select>
-            <select
-              value={fontSize}
-              onChange={(e) => setFontSize(e.target.value)}
-              className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-            >
-              <option value="sm">Small</option>
-              <option value="base">Normal</option>
-              <option value="lg">Large</option>
-              <option value="xl">Extra Large</option>
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsBold(!isBold)}
-              className={`px-3 py-1.5 rounded-lg text-sm ${
-                isBold ? 'bg-primary/10 text-primary' : 'bg-gray-50 hover:bg-gray-100'
-              }`}
-            >
-              Bold
-            </button>
-            <button
-              onClick={() => setIsItalic(!isItalic)}
-              className={`px-3 py-1.5 rounded-lg text-sm ${
-                isItalic ? 'bg-primary/10 text-primary' : 'bg-gray-50 hover:bg-gray-100'
-              }`}
-            >
-              Italic
-            </button>
-          </div>
-        </div>
+  const handleFlag = () => {
+    if (!flagReason) {
+      toast.error('Please select a reason for flagging this note');
+      return;
+    }
+    onFlag(note.id, flagReason);
+    setShowFlagModal(false);
+    setFlagReason('');
+    setShowSettings(false);
+    toast.success('Note has been flagged for review');
+  };
 
-        {/* Quick Actions */}
-        <div className="border-t border-gray-100 pt-3">
-          <div className="flex flex-wrap gap-2">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsPinned(!isPinned)}
-              className={`p-2 rounded-lg flex items-center gap-2 ${
-                isPinned ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
-              }`}
-            >
-              <FiStar className="w-4 h-4" />
-              <span className="text-sm">Pin</span>
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsBookmarked(!isBookmarked)}
-              className={`p-2 rounded-lg flex items-center gap-2 ${
-                isBookmarked ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
-              }`}
-            >
-              <FiBookmark className="w-4 h-4" />
-              <span className="text-sm">Bookmark</span>
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsLocked(!isLocked)}
-              className={`p-2 rounded-lg flex items-center gap-2 ${
-                isLocked ? 'bg-gray-100 text-gray-600' : 'hover:bg-gray-100'
-              }`}
-            >
-              <FiLock className="w-4 h-4" />
-              <span className="text-sm">Lock</span>
-            </motion.button>
-          </div>
-        </div>
+  const SettingsMenu = () => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 3;
+    const totalPages = 4;
 
-        <div className="border-t border-gray-100 pt-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <span className="text-sm font-medium">Priority</span>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-              >
-                <option value="normal">Normal</option>
-                <option value="high">High</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <span className="text-sm font-medium">Due Date</span>
-              <input
-                type="datetime-local"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-              />
-            </div>
-          </div>
-        </div>
+    const renderSettingsPage = () => {
+      switch (currentPage) {
+        case 1:
+          return (
+            <>
+              {/* Text Styling */}
+              <div className="space-y-3">
+                <span className="text-sm font-medium block">Text Style</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={fontFamily}
+                    onChange={(e) => setFontFamily(e.target.value)}
+                    className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+                  >
+                    <option value="sans">Sans-serif</option>
+                    <option value="serif">Serif</option>
+                    <option value="mono">Monospace</option>
+                    <option value="cursive">Cursive</option>
+                    <option value="handwritten">Handwritten</option>
+                  </select>
+                  <select
+                    value={fontSize}
+                    onChange={(e) => setFontSize(e.target.value)}
+                    className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+                  >
+                    <option value="sm">Small</option>
+                    <option value="base">Normal</option>
+                    <option value="lg">Large</option>
+                    <option value="xl">Extra Large</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setIsBold(!isBold)}
+                    className={`px-3 py-1.5 rounded-lg text-sm ${
+                      isBold ? 'bg-primary/10 text-primary' : 'bg-gray-50 hover:bg-gray-100'
+                    }`}
+                  >
+                    Bold
+                  </button>
+                  <button
+                    onClick={() => setIsItalic(!isItalic)}
+                    className={`px-3 py-1.5 rounded-lg text-sm ${
+                      isItalic ? 'bg-primary/10 text-primary' : 'bg-gray-50 hover:bg-gray-100'
+                    }`}
+                  >
+                    Italic
+                  </button>
+                </div>
+              </div>
 
-        {/* Colors */}
-        <div className="border-t border-gray-100 pt-3">
-          <span className="text-sm font-medium block mb-2">Color</span>
-          <div className="grid grid-cols-5 gap-2">
-            {Object.keys(colorClasses).map((colorOption) => (
+              {/* Quick Actions */}
+              <div className="border-t border-gray-100 pt-3">
+                <div className="flex flex-wrap gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsPinned(!isPinned)}
+                    className={`p-2 rounded-lg flex items-center gap-2 ${
+                      isPinned ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
+                    }`}
+                  >
+                    <FiStar className="w-4 h-4" />
+                    <span className="text-sm">Pin</span>
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsBookmarked(!isBookmarked)}
+                    className={`p-2 rounded-lg flex items-center gap-2 ${
+                      isBookmarked ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
+                    }`}
+                  >
+                    <FiBookmark className="w-4 h-4" />
+                    <span className="text-sm">Bookmark</span>
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsLocked(!isLocked)}
+                    className={`p-2 rounded-lg flex items-center gap-2 ${
+                      isLocked ? 'bg-gray-100 text-gray-600' : 'hover:bg-gray-100'
+                    }`}
+                  >
+                    <FiLock className="w-4 h-4" />
+                    <span className="text-sm">Lock</span>
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowFlagModal(true)}
+                    className="p-2 rounded-lg flex items-center gap-2 text-red-600 hover:bg-red-50"
+                  >
+                    <FiFlag className="w-4 h-4" />
+                    <span className="text-sm">Flag</span>
+                  </motion.button>
+                </div>
+              </div>
+            </>
+          );
+        case 2:
+          return (
+            <>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <span className="text-sm font-medium">Priority</span>
+                    <select
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+                    >
+                      <option value="normal">Normal</option>
+                      <option value="high">High</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-sm font-medium">Due Date</span>
+                    <input
+                      type="datetime-local"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Colors */}
+                <div className="border-t border-gray-100 pt-3">
+                  <span className="text-sm font-medium block mb-2">Color</span>
+                  <div className="grid grid-cols-5 gap-2">
+                    {Object.keys(colorClasses).map((colorOption) => (
+                      <motion.button
+                        key={colorOption}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setColor(colorOption)}
+                        className={`w-8 h-8 rounded-lg ${colorClasses[colorOption]} ${
+                          color === colorOption ? 'ring-2 ring-gray-600' : ''
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          );
+        case 3:
+          return (
+            <>
+              {/* Labels */}
+              <div className="space-y-4">
+                <div>
+                  <span className="text-sm font-medium block mb-2">Labels</span>
+                  <div className="flex flex-wrap gap-2">
+                    {labels.map((label, index) => (
+                      <span
+                        key={index}
+                        className="px-2 py-1 bg-gray-100 rounded-lg text-sm flex items-center gap-1"
+                      >
+                        {label}
+                        <button
+                          onClick={() => setLabels(labels.filter((_, i) => i !== index))}
+                          className="hover:text-red-500"
+                        >
+                          <FiX className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                    <button
+                      onClick={() => {
+                        const label = prompt('Enter new label:');
+                        if (label) setLabels([...labels, label]);
+                      }}
+                      className="px-2 py-1 border border-dashed border-gray-300 rounded-lg text-sm hover:border-primary hover:text-primary"
+                    >
+                      + Add Label
+                    </button>
+                  </div>
+                </div>
+
+                {/* Additional Actions */}
+                <div className="border-t border-gray-100 pt-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => onDuplicate(note)}
+                      className="p-2 rounded-lg flex items-center gap-2 hover:bg-gray-100"
+                    >
+                      <FiCopy className="w-4 h-4" />
+                      <span className="text-sm">Duplicate</span>
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleShare}
+                      className="p-2 rounded-lg flex items-center gap-2 hover:bg-gray-100"
+                    >
+                      <FiShare2 className="w-4 h-4" />
+                      <span className="text-sm">Share</span>
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleArchive}
+                      className={`p-2 rounded-lg flex items-center gap-2 ${
+                        note.isArchived ? 'bg-secondary/10 text-secondary' : 'hover:bg-gray-100'
+                      }`}
+                    >
+                      <FiArchive className="w-4 h-4" />
+                      <span className="text-sm">{note.isArchived ? 'Restore' : 'Archive'}</span>
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        const time = prompt('Set reminder (minutes):', '5');
+                        if (time) setReminder(new Date(Date.now() + parseInt(time) * 60000));
+                      }}
+                      className="p-2 rounded-lg flex items-center gap-2 hover:bg-gray-100"
+                    >
+                      <FiClock className="w-4 h-4" />
+                      <span className="text-sm">Reminder</span>
+                    </motion.button>
+                  </div>
+                </div>
+              </div>
+            </>
+          );
+        case 4:
+          return <AttachmentsSection />;
+        default:
+          return null;
+      }
+    };
+
+    return (
+      <motion.div
+        ref={settingsRef}
+        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+        transition={{ duration: 0.2 }}
+        className="absolute top-12 right-0 bg-white rounded-lg shadow-lg p-4 z-10 min-w-[250px]"
+      >
+        <div className="space-y-4">
+          {renderSettingsPage()}
+
+          {/* Pagination */}
+          <div className="flex justify-center items-center gap-2 pt-4 border-t border-gray-100">
+            {[...Array(totalPages)].map((_, index) => (
               <motion.button
-                key={colorOption}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setColor(colorOption)}
-                className={`w-8 h-8 rounded-lg ${colorClasses[colorOption]} ${
-                  color === colorOption ? 'ring-2 ring-gray-600' : ''
+                key={index}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setCurrentPage(index + 1)}
+                className={`w-2 h-2 rounded-full ${
+                  currentPage === index + 1 ? 'bg-primary' : 'bg-gray-300'
                 }`}
               />
             ))}
           </div>
         </div>
+      </motion.div>
+    );
+  };
 
-        {/* Labels */}
-        <div className="border-t border-gray-100 pt-3">
-          <span className="text-sm font-medium block mb-2">Labels</span>
-          <div className="flex flex-wrap gap-2">
-            {labels.map((label, index) => (
-              <span
-                key={index}
-                className="px-2 py-1 bg-gray-100 rounded-lg text-sm flex items-center gap-1"
-              >
-                {label}
-                <button
-                  onClick={() => setLabels(labels.filter((_, i) => i !== index))}
-                  className="hover:text-red-500"
-                >
-                  <FiX className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-            <button
-              onClick={() => {
-                const label = prompt('Enter new label:');
-                if (label) setLabels([...labels, label]);
-              }}
-              className="px-2 py-1 border border-dashed border-gray-300 rounded-lg text-sm hover:border-primary hover:text-primary"
-            >
-              + Add Label
-            </button>
-          </div>
-        </div>
+  const handleShare = async () => {
+    try {
+      // Generate a unique sharing URL
+      const shareId = Math.random().toString(36).substring(2, 15);
+      const shareUrl = `${window.location.origin}/share/${shareId}`;
+      
+      // Update the note with sharing information
+      const updatedNote = {
+        ...note,
+        shared: true,
+        shareId,
+        shareUrl,
+        sharedAt: new Date()
+      };
+      
+      await onUpdate(updatedNote);
+      
+      // Create a share dialog with options
+      const shareData = {
+        title: note.title,
+        text: note.content,
+        url: shareUrl
+      };
 
-        {/* Additional Actions */}
-        <div className="border-t border-gray-100 pt-3">
-          <div className="grid grid-cols-2 gap-2">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => onDuplicate(note)}
-              className="p-2 rounded-lg flex items-center gap-2 hover:bg-gray-100"
-            >
-              <FiCopy className="w-4 h-4" />
-              <span className="text-sm">Duplicate</span>
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => onShare(note)}
-              className="p-2 rounded-lg flex items-center gap-2 hover:bg-gray-100"
-            >
-              <FiShare2 className="w-4 h-4" />
-              <span className="text-sm">Share</span>
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={handleArchive}
-              className={`p-2 rounded-lg flex items-center gap-2 ${
-                note.isArchived ? 'bg-secondary/10 text-secondary' : 'hover:bg-gray-100'
-              }`}
-            >
-              <FiArchive className="w-4 h-4" />
-              <span className="text-sm">{note.isArchived ? 'Restore' : 'Archive'}</span>
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                const time = prompt('Set reminder (minutes):', '5');
-                if (time) setReminder(new Date(Date.now() + parseInt(time) * 60000));
-              }}
-              className="p-2 rounded-lg flex items-center gap-2 hover:bg-gray-100"
-            >
-              <FiClock className="w-4 h-4" />
-              <span className="text-sm">Reminder</span>
-            </motion.button>
-          </div>
-        </div>
-
-        {/* Images */}
-        <div className="border-t border-gray-100 pt-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Images</span>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleImageUpload}
-              accept="image/*"
-              multiple
-              className="hidden"
-            />
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 rounded-lg hover:bg-gray-100"
-            >
-              <FiImage className="w-4 h-4" />
-            </motion.button>
-          </div>
-          {images.length > 0 && (
-            <div className="grid grid-cols-4 gap-2">
-              {images.map((image, index) => (
-                <div key={index} className="relative group">
-                  <img src={image} alt="" className="w-12 h-12 object-cover rounded-lg" />
-                  <button
-                    onClick={() => removeImage(index)}
-                    className="absolute -top-1 -right-1 p-0.5 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <FiX className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Attachments */}
-        <AttachmentsSection />
-      </div>
-    </motion.div>
-  );
+      if (navigator.share && navigator.canShare(shareData)) {
+        // Use native sharing if available
+        await navigator.share(shareData);
+      } else {
+        // Fallback to clipboard copy
+        await navigator.clipboard.writeText(shareUrl);
+        alert('Share link copied to clipboard!');
+      }
+    } catch (error) {
+      console.error('Error sharing note:', error);
+      alert('Failed to share note. Please try again.');
+    }
+  };
 
   const AttachmentsSection = () => (
     <div className="border-t border-gray-100 pt-3">
@@ -672,81 +738,91 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
     return (
       <motion.div
         layout
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        whileHover={{ scale: 1.02 }}
-        className={`${colorClasses[color]} rounded-lg shadow-lg p-4 flex items-center justify-between ${
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
+        className={`${colorClasses[color]} rounded-lg shadow-lg p-4 relative ${
           isPinned ? 'ring-2 ring-primary' : ''
         } ${note.isArchived ? 'opacity-75' : ''}`}
       >
-        <div className="flex-grow">
-          <div className="flex items-center gap-2 mb-1">
-            {isPinned && <FiStar className="text-primary" />}
-            {isLocked && <FiLock className="text-gray-600" />}
-            {priority !== 'normal' && (
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                priority === 'high' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
-              }`}>
-                {priority}
-              </span>
-            )}
-            <h3 className={`font-bold text-lg ${fontFamilies[fontFamily]} ${isBold ? 'font-bold' : ''} ${
-              isItalic ? 'italic' : ''
-            }`}>
-              {title}
-            </h3>
-          </div>
-          <p className="text-gray-700 truncate max-w-xl">{content}</p>
-          {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              {tags.map((tag, index) => (
-                <span key={index} className="text-xs bg-white/50 px-1.5 py-0.5 rounded-full">
-                  {tag}
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              {isPinned && <FiStar className="text-primary" />}
+              {isLocked && <FiLock className="text-gray-600" />}
+              {note.isBookmarked && <FiBookmark className="text-primary" />}
+              {priority !== 'normal' && (
+                <span className={`px-2 py-0.5 rounded-full text-xs ${
+                  priority === 'high' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
+                }`}>
+                  {priority}
                 </span>
-              ))}
+              )}
+              <h3 className={`font-bold text-lg ${fontFamilies[fontFamily]} ${isBold ? 'font-bold' : ''} ${
+                isItalic ? 'italic' : ''
+              }`}>
+                {title}
+              </h3>
             </div>
-          )}
-          <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
-            <div className="flex items-center">
-              <FiClock className="w-4 h-4 mr-1" />
-              <span>{formatDate(note.updatedAt)}</span>
-            </div>
-            {dueDate && (
-              <div className="flex items-center">
-                <FiAlertCircle className="w-4 h-4 mr-1" />
-                <span>{formatDate(dueDate)}</span>
+            <p className="text-gray-700 truncate max-w-xl">{content}</p>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {tags.map((tag, index) => (
+                  <span key={index} className="text-xs bg-white/50 px-1.5 py-0.5 rounded-full">
+                    {tag}
+                  </span>
+                ))}
               </div>
             )}
+            <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+              <div className="flex items-center">
+                <FiClock className="w-4 h-4 mr-1" />
+                <span>{formatDate(note.updatedAt)}</span>
+              </div>
+              {dueDate && (
+                <div className="flex items-center">
+                  <FiAlertCircle className="w-4 h-4 mr-1" />
+                  <span>{formatDate(dueDate)}</span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex items-center space-x-2">
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setIsEditing(true)}
-            className="p-2 rounded-full hover:bg-white/20"
-            disabled={isLocked}
-          >
-            <FiEdit2 className="w-5 h-5" />
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={handleArchive}
-            className="p-2 rounded-full hover:bg-white/20"
-          >
-            <FiArchive className="w-5 h-5" />
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => onDelete(note.id)}
-            className="p-2 rounded-full hover:bg-white/20"
-            disabled={isLocked}
-          >
-            <FiTrash2 className="w-5 h-5" />
-          </motion.button>
+          <div className="flex items-center space-x-2">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setIsEditing(true)}
+              className="p-2 rounded-full hover:bg-white/20"
+              disabled={isLocked}
+            >
+              <FiEdit2 className="w-5 h-5" />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={handleBookmark}
+              className={`p-2 rounded-full hover:bg-white/20 ${note.isBookmarked ? 'text-primary' : ''}`}
+            >
+              <FiBookmark className="w-5 h-5" />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={handleArchive}
+              className={`p-2 rounded-full hover:bg-white/20 ${note.isArchived ? 'text-primary' : ''}`}
+            >
+              <FiArchive className="w-5 h-5" />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => onDelete(note.id)}
+              className="p-2 rounded-full hover:bg-white/20"
+              disabled={isLocked}
+            >
+              <FiTrash2 className="w-5 h-5" />
+            </motion.button>
+          </div>
         </div>
       </motion.div>
     );
@@ -857,7 +933,7 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
             <div className="flex items-center gap-2 flex-grow">
               {isPinned && <FiStar className="text-primary" />}
               {isLocked && <FiLock className="text-gray-600" />}
-              {isBookmarked && <FiBookmark className="text-primary" />}
+              {note.isBookmarked && <FiBookmark className="text-primary" />}
               {priority !== 'normal' && (
                 <span className={`px-2 py-0.5 rounded-full text-xs ${
                   priority === 'high' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
@@ -983,6 +1059,60 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
           </button>
         </div>
       )}
+
+      {/* Flag Modal */}
+      <AnimatePresence>
+        {showFlagModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowFlagModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-xl p-6 w-full max-w-md"
+            >
+              <h3 className="text-lg font-semibold mb-4">Flag Note</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Please select a reason for flagging this note. This will be reviewed by administrators.
+              </p>
+              <select
+                value={flagReason}
+                onChange={(e) => setFlagReason(e.target.value)}
+                className="w-full p-3 border border-gray-200 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="">Select a reason</option>
+                <option value="spam">Spam</option>
+                <option value="inappropriate">Inappropriate Content</option>
+                <option value="offensive">Offensive Content</option>
+                <option value="violence">Violence</option>
+                <option value="harassment">Harassment</option>
+                <option value="other">Other</option>
+              </select>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowFlagModal(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleFlag}
+                  disabled={!flagReason}
+                  className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Submit Flag
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

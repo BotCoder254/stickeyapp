@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, arrayUnion } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { FiPlus, FiGrid, FiList, FiPieChart, FiBarChart2, FiClock, FiStar, FiTag, FiFilter, FiArchive, FiBookmark, FiTrendingUp } from 'react-icons/fi';
+import { FiPlus, FiGrid, FiList, FiPieChart, FiBarChart2, FiClock, FiStar, FiTag, FiFilter, FiArchive, FiBookmark, FiTrendingUp, FiFileText } from 'react-icons/fi';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { db, storage } from '../../config/firebase';
 import { useAuth } from '../../hooks/useAuth';
@@ -10,6 +10,7 @@ import AuthNav from '../Navigation/AuthNav';
 import StickyNote from '../Notes/StickyNote';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import MobileNav from '../Navigation/MobileNav';
+import { toast } from 'react-hot-toast';
 
 const COLORS = ['#3A59D1', '#3D90D7', '#7AC6D2', '#B5FCCD'];
 
@@ -24,6 +25,7 @@ const Dashboard = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [showBookmarked, setShowBookmarked] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showActivityLog, setShowActivityLog] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     archived: 0,
@@ -316,12 +318,30 @@ const Dashboard = () => {
   const handleArchiveNote = async (note) => {
     try {
       const noteRef = doc(db, 'notes', note.id);
+      const isArchived = !note.isArchived;
       await updateDoc(noteRef, {
-        isArchived: !note.isArchived,
+        isArchived,
         updatedAt: new Date()
       });
+      toast.success(isArchived ? 'Note archived' : 'Note restored');
     } catch (error) {
       console.error('Error archiving note:', error);
+      toast.error('Failed to archive note');
+    }
+  };
+
+  const handleBookmarkNote = async (note) => {
+    try {
+      const noteRef = doc(db, 'notes', note.id);
+      const isBookmarked = !note.isBookmarked;
+      await updateDoc(noteRef, {
+        isBookmarked,
+        updatedAt: new Date()
+      });
+      toast.success(isBookmarked ? 'Note bookmarked' : 'Bookmark removed');
+    } catch (error) {
+      console.error('Error bookmarking note:', error);
+      toast.error('Failed to bookmark note');
     }
   };
 
@@ -357,6 +377,23 @@ const Dashboard = () => {
       alert('Note content copied to clipboard!');
     } catch (error) {
       console.error('Error sharing note:', error);
+    }
+  };
+
+  const handleFlagNote = async (noteId, reason) => {
+    try {
+      const noteRef = doc(db, 'notes', noteId);
+      await updateDoc(noteRef, {
+        flags: arrayUnion({
+          userId: user.uid,
+          reason,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+      toast.success('Note has been flagged for review');
+    } catch (error) {
+      console.error('Error flagging note:', error);
+      toast.error('Failed to flag note');
     }
   };
 
@@ -650,7 +687,8 @@ const Dashboard = () => {
                   onFileUpload={handleFileUpload}
                   onDeleteFile={handleDeleteFile}
                   onAudioRecord={handleAudioRecording}
-                  onBookmark={(note) => handleUpdateNote({ ...note, isBookmarked: !note.isBookmarked })}
+                  onBookmark={handleBookmarkNote}
+                  onFlag={handleFlagNote}
                   isListView={viewMode === 'list'}
                   index={index}
                 />
