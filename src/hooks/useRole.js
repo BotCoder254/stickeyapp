@@ -34,8 +34,9 @@ export const useRole = () => {
       } catch (error) {
         console.error('Error fetching initial role:', error);
         setRole(ROLES.USER);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchInitialRole();
@@ -53,6 +54,7 @@ export const useRole = () => {
       },
       (error) => {
         console.error('Error in role subscription:', error);
+        setRole(ROLES.USER);
       }
     );
 
@@ -64,13 +66,18 @@ export const useRole = () => {
   const isGuest = role === ROLES.GUEST;
 
   const checkPermission = (requiredRole) => {
+    if (!user) return false;
+    
     const roleHierarchy = {
       [ROLES.ADMIN]: 3,
       [ROLES.USER]: 2,
       [ROLES.GUEST]: 1
     };
 
-    return roleHierarchy[role] >= roleHierarchy[requiredRole];
+    const userRoleLevel = roleHierarchy[role] || 1;
+    const requiredRoleLevel = roleHierarchy[requiredRole] || 1;
+
+    return userRoleLevel >= requiredRoleLevel;
   };
 
   const getRoleLabel = (roleValue) => {
@@ -93,7 +100,8 @@ export const useRole = () => {
     isGuest,
     checkPermission,
     getRoleLabel,
-    loading
+    loading,
+    ROLES
   };
 };
 

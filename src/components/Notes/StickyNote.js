@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiEdit2, FiTrash2, FiCheck, FiX, FiCalendar, FiClock, FiHash, FiPaperclip, FiStar, FiAlertCircle, FiLock, FiImage, FiMoreVertical, FiArchive, FiShare2, FiCopy, FiTag, FiBookmark, FiFlag, FiType, FiAlignLeft, FiMic, FiFile, FiUpload, FiPlay, FiPause, FiDownload } from 'react-icons/fi';
-import toast from 'react-hot-toast';
+import { FiEdit2, FiTrash2, FiMoreVertical, FiCheck, FiX, FiStar, FiLock, FiBookmark, 
+  FiArchive, FiCalendar, FiClock, FiAlertCircle, FiPaperclip, FiUpload, FiMic, 
+  FiPlay, FiPause, FiDownload, FiFile, FiFlag, FiUsers, FiCopy, FiShare2, FiHash } from 'react-icons/fi';
+import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { useAuth } from '../../hooks/useAuth';
+import { toast } from 'react-hot-toast';
+import LoadingSpinner from '../LoadingSpinner';
 
 const colorClasses = {
   yellow: 'bg-yellow-200',
@@ -86,6 +92,14 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
   const dropZoneRef = useRef(null);
   const [showFlagModal, setShowFlagModal] = useState(false);
   const [flagReason, setFlagReason] = useState('');
+  const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState(note.groupId || '');
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [userGroups, setUserGroups] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [currentGroup, setCurrentGroup] = useState(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const extractedTags = content.match(/#\w+/g) || [];
@@ -121,6 +135,100 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
 
     return () => clearInterval(timerRef.current);
   }, [isRecording]);
+
+  useEffect(() => {
+    fetchUserGroups();
+  }, [user]);
+
+  useEffect(() => {
+    if (note.groupId) {
+      fetchCurrentGroup();
+    }
+  }, [note.groupId]);
+
+  const fetchUserGroups = async () => {
+    try {
+      setLoading(true);
+      const groupsRef = collection(db, 'groups');
+      const q = query(groupsRef, where('members', 'array-contains', user.email));
+      const snapshot = await getDocs(q);
+      const groups = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setUserGroups(groups);
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+      toast.error('Failed to fetch groups');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCurrentGroup = async () => {
+    try {
+      if (!note.groupId) return;
+      const groupRef = doc(db, 'groups', note.groupId);
+      const groupSnap = await getDoc(groupRef);
+      if (groupSnap.exists()) {
+        setCurrentGroup(groupSnap.data());
+      }
+    } catch (error) {
+      console.error('Error fetching group:', error);
+    }
+  };
+
+  const handleAddToGroup = async (groupId) => {
+    try {
+      if (note.groupId) {
+        toast.error('Note is already in a group. Remove it first.');
+        return;
+      }
+
+      const noteRef = doc(db, 'notes', note.id);
+      await updateDoc(noteRef, {
+        groupId: groupId,
+        lastModified: serverTimestamp()
+      });
+      toast.success('Added to group successfully');
+      setShowGroupModal(false);
+      if (onUpdate) {
+        onUpdate({ ...note, groupId });
+      }
+    } catch (error) {
+      console.error('Error adding to group:', error);
+      toast.error('Failed to add to group');
+    }
+  };
+
+  const handleRemoveFromGroup = async () => {
+    try {
+      const noteRef = doc(db, 'notes', note.id);
+      await updateDoc(noteRef, {
+        groupId: null,
+        lastModified: serverTimestamp()
+      });
+      
+      // Update local state
+      setSelectedGroup('');
+      setCurrentGroup(null);
+      setShowGroupModal(false);
+      
+      // Show success message
+      toast.success('Removed from group');
+      
+      // Update parent component
+      if (onUpdate) {
+        onUpdate({
+          ...note,
+          groupId: null
+        });
+      }
+    } catch (error) {
+      console.error('Error removing from group:', error);
+      toast.error('Failed to remove from group');
+    }
+  };
 
   const openSettingsMenu = () => {
     if (menuTimeoutRef.current) {
@@ -583,6 +691,35 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
               />
             ))}
           </div>
+
+          {/* Group Settings */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-gray-700">Group</h3>
+            <div className="flex items-center space-x-2">
+              {currentGroup ? (
+                <>
+                  <div className="flex-1 px-3 py-1.5 text-sm bg-gray-100 rounded-md">
+                    <span className="text-gray-700">{currentGroup.name}</span>
+                  </div>
+                  <button
+                    onClick={handleRemoveFromGroup}
+                    className="flex items-center px-3 py-1.5 text-sm text-red-600 bg-red-100 rounded-md hover:bg-red-200"
+                  >
+                    <FiX className="w-4 h-4 mr-2" />
+                    Remove
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowGroupModal(true)}
+                  className="flex items-center px-3 py-1.5 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                >
+                  <FiUsers className="w-4 h-4 mr-2" />
+                  Add to Group
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </motion.div>
     );
@@ -734,6 +871,62 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
     </div>
   );
 
+  const GroupModal = () => (
+    <AnimatePresence>
+      {showGroupModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowGroupModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+          >
+            <h3 className="text-lg font-semibold mb-4">Add to Group</h3>
+            {loading ? (
+              <div className="flex justify-center py-4">
+                <LoadingSpinner />
+              </div>
+            ) : userGroups.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">
+                You are not a member of any groups
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {userGroups.map(group => (
+                  <button
+                    key={group.id}
+                    onClick={() => handleAddToGroup(group.id)}
+                    className="w-full p-3 text-left rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <div className="font-medium">{group.name}</div>
+                    <div className="text-sm text-gray-500">
+                      {group.members.length} members
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setShowGroupModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   if (isListView) {
     return (
       <motion.div
@@ -829,291 +1022,294 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
   }
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.8 }}
-      whileHover={{ scale: 1.02 }}
-      className={`${colorClasses[color]} rounded-lg shadow-lg p-4 relative min-h-[200px] flex flex-col ${
-        isPinned ? 'ring-2 ring-primary' : ''
-      } ${note.isArchived ? 'opacity-75' : ''}`}
-    >
-      {isEditing ? (
-        <>
-          <div className="flex items-center gap-2 mb-2">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+    <>
+      <motion.div
+        layout
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        whileHover={{ scale: 1.02 }}
+        className={`${colorClasses[color]} rounded-lg shadow-lg p-4 relative min-h-[200px] flex flex-col ${
+          isPinned ? 'ring-2 ring-primary' : ''
+        } ${note.isArchived ? 'opacity-75' : ''}`}
+      >
+        {isEditing ? (
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className={`flex-grow bg-transparent border-b border-gray-600 px-2 py-1 focus:outline-none focus:border-primary ${
+                  fontFamilies[fontFamily]
+                } ${fontSizes[fontSize]} ${isBold ? 'font-bold' : ''} ${isItalic ? 'italic' : ''}`}
+                placeholder="Title"
+              />
+              <div className="relative">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={toggleSettings}
+                  className="p-2 rounded-full hover:bg-white/20"
+                >
+                  <FiMoreVertical className="w-5 h-5" />
+                </motion.button>
+                <AnimatePresence>
+                  {showSettings && <SettingsMenu />}
+                </AnimatePresence>
+              </div>
+            </div>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
-              className={`flex-grow bg-transparent border-b border-gray-600 px-2 py-1 focus:outline-none focus:border-primary ${
+              className={`bg-transparent flex-grow resize-none mb-4 px-2 py-1 focus:outline-none ${
                 fontFamilies[fontFamily]
               } ${fontSizes[fontSize]} ${isBold ? 'font-bold' : ''} ${isItalic ? 'italic' : ''}`}
-            placeholder="Title"
-          />
-            <div className="relative">
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={toggleSettings}
-                className="p-2 rounded-full hover:bg-white/20"
+              placeholder="Write your note here... Use #tags for organization"
+            />
+            {images.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {images.map((image, index) => (
+                  <div key={index} className="relative group">
+                    <img src={image} alt="" className="w-16 h-16 object-cover rounded-lg" />
+                    <button
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-1 -right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <FiX className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-between items-center text-sm text-gray-600">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center">
+                  <FiHash className="w-4 h-4 mr-1" />
+                  <span>{tags.length}</span>
+                </div>
+                <div className="flex items-center">
+                  <FiPaperclip className="w-4 h-4 mr-1" />
+                  <span>{charCount}</span>
+                </div>
+                {reminder && (
+                  <div className="flex items-center">
+                    <FiClock className="w-4 h-4 mr-1" />
+                    <span>{formatDate(reminder)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex space-x-2">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleSave}
+                  className="p-2 rounded-full hover:bg-white/20"
+                >
+                  <FiCheck className="w-5 h-5" />
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleCancel}
+                  className="p-2 rounded-full hover:bg-white/20"
+                >
+                  <FiX className="w-5 h-5" />
+                </motion.button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 flex-grow">
+                {isPinned && <FiStar className="text-primary" />}
+                {isLocked && <FiLock className="text-gray-600" />}
+                {note.isBookmarked && <FiBookmark className="text-primary" />}
+                {priority !== 'normal' && (
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${
+                    priority === 'high' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
+                  }`}>
+                    {priority}
+                  </span>
+                )}
+                <h3 className={`font-bold text-lg ${fontFamilies[fontFamily]} ${isBold ? 'font-bold' : ''} ${
+                  isItalic ? 'italic' : ''
+                }`}>
+                  {title}
+                </h3>
+              </div>
+              <div className="relative">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={toggleSettings}
+                  className="p-2 rounded-full hover:bg-white/20"
+                >
+                  <FiMoreVertical className="w-5 h-5" />
+                </motion.button>
+                <AnimatePresence>
+                  {showSettings && <SettingsMenu />}
+                </AnimatePresence>
+              </div>
+            </div>
+            <p className={`flex-grow whitespace-pre-wrap ${fontFamilies[fontFamily]} ${fontSizes[fontSize]} ${
+              isBold ? 'font-bold' : ''
+            } ${isItalic ? 'italic' : ''}`}>
+              {content}
+            </p>
+            {images.length > 0 && (
+              <div className="flex flex-wrap gap-2 my-2">
+                {images.map((image, index) => (
+                  <img key={index} src={image} alt="" className="w-16 h-16 object-cover rounded-lg" />
+                ))}
+              </div>
+            )}
+            {(tags.length > 0 || labels.length > 0) && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {tags.map((tag, index) => (
+                  <span key={`tag-${index}`} className="text-xs bg-white/50 px-1.5 py-0.5 rounded-full">
+                    {tag}
+                  </span>
+                ))}
+                {labels.map((label, index) => (
+                  <span key={`label-${index}`} className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                    {label}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                <div className="flex items-center">
+                  <FiCalendar className="w-4 h-4 mr-1" />
+                  <span>{formatDate(note.updatedAt)}</span>
+                </div>
+                {dueDate && (
+                  <div className="flex items-center">
+                    <FiAlertCircle className="w-4 h-4 mr-1" />
+                    <span>{formatDate(dueDate)}</span>
+                  </div>
+                )}
+                {reminder && (
+                  <div className="flex items-center">
+                    <FiClock className="w-4 h-4 mr-1" />
+                    <span>{formatDate(reminder)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex space-x-2">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setIsEditing(true)}
+                  className="p-2 rounded-full hover:bg-white/20"
+                  disabled={isLocked}
+                >
+                  <FiEdit2 className="w-5 h-5" />
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => onDelete(note.id)}
+                  className="p-2 rounded-full hover:bg-white/20"
+                  disabled={isLocked}
+                >
+                  <FiTrash2 className="w-5 h-5" />
+                </motion.button>
+              </div>
+            </div>
+          </>
+        )}
+        
+        {isEditing && <AttachmentsSection />}
+
+        {/* Mobile Actions */}
+        {!isListView && (
+          <div className="flex sm:hidden items-center gap-2 mt-4">
+            <button
+              onClick={handleBookmark}
+              className={`p-2 rounded-full transition-colors ${
+                isBookmarked ? 'bg-primary/20 text-primary' : 'hover:bg-black/10'
+              }`}
             >
-              <FiMoreVertical className="w-5 h-5" />
-              </motion.button>
-              <AnimatePresence>
-                {showSettings && <SettingsMenu />}
-              </AnimatePresence>
+              <FiBookmark className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleArchive}
+              className={`p-2 rounded-full transition-colors ${
+                isArchived ? 'bg-gray-200' : 'hover:bg-black/10'
+              }`}
+            >
+              <FiArchive className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => onDelete(note.id)}
+              className="p-2 hover:bg-black/10 rounded-full transition-colors text-red-500"
+            >
+              <FiTrash2 className="w-5 h-5" />
+            </button>
           </div>
-        </div>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className={`bg-transparent flex-grow resize-none mb-4 px-2 py-1 focus:outline-none ${
-              fontFamilies[fontFamily]
-            } ${fontSizes[fontSize]} ${isBold ? 'font-bold' : ''} ${isItalic ? 'italic' : ''}`}
-            placeholder="Write your note here... Use #tags for organization"
-        />
-          {images.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4">
-              {images.map((image, index) => (
-                <div key={index} className="relative group">
-                  <img src={image} alt="" className="w-16 h-16 object-cover rounded-lg" />
+        )}
+
+        {/* Flag Modal */}
+        <AnimatePresence>
+          {showFlagModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+              onClick={() => setShowFlagModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.95 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-xl p-6 w-full max-w-md"
+              >
+                <h3 className="text-lg font-semibold mb-4">Flag Note</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Please select a reason for flagging this note. This will be reviewed by administrators.
+                </p>
+                <select
+                  value={flagReason}
+                  onChange={(e) => setFlagReason(e.target.value)}
+                  className="w-full p-3 border border-gray-200 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Select a reason</option>
+                  <option value="spam">Spam</option>
+                  <option value="inappropriate">Inappropriate Content</option>
+                  <option value="offensive">Offensive Content</option>
+                  <option value="violence">Violence</option>
+                  <option value="harassment">Harassment</option>
+                  <option value="other">Other</option>
+                </select>
+                <div className="flex justify-end gap-3">
                   <button
-                    onClick={() => removeImage(index)}
-                    className="absolute -top-1 -right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => setShowFlagModal(false)}
+                    className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
                   >
-                    <FiX className="w-3 h-3" />
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleFlag}
+                    disabled={!flagReason}
+                    className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Submit Flag
                   </button>
                 </div>
-              ))}
-            </div>
-          )}
-          <div className="flex justify-between items-center text-sm text-gray-600">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center">
-                <FiHash className="w-4 h-4 mr-1" />
-                <span>{tags.length}</span>
-                </div>
-              <div className="flex items-center">
-                <FiPaperclip className="w-4 h-4 mr-1" />
-                <span>{charCount}</span>
-              </div>
-              {reminder && (
-                <div className="flex items-center">
-                  <FiClock className="w-4 h-4 mr-1" />
-                  <span>{formatDate(reminder)}</span>
-            </div>
-          )}
-            </div>
-            <div className="flex space-x-2">
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={handleSave}
-                className="p-2 rounded-full hover:bg-white/20"
-                  >
-                <FiCheck className="w-5 h-5" />
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={handleCancel}
-                className="p-2 rounded-full hover:bg-white/20"
-                  >
-                <FiX className="w-5 h-5" />
-              </motion.button>
-                </div>
-            </div>
-        </>
-      ) : (
-        <>
-          <div className="flex items-center gap-2 mb-2">
-            <div className="flex items-center gap-2 flex-grow">
-              {isPinned && <FiStar className="text-primary" />}
-              {isLocked && <FiLock className="text-gray-600" />}
-              {note.isBookmarked && <FiBookmark className="text-primary" />}
-              {priority !== 'normal' && (
-                <span className={`px-2 py-0.5 rounded-full text-xs ${
-                  priority === 'high' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
-                }`}>
-                  {priority}
-                </span>
-          )}
-              <h3 className={`font-bold text-lg ${fontFamilies[fontFamily]} ${isBold ? 'font-bold' : ''} ${
-                isItalic ? 'italic' : ''
-        }`}>
-                {title}
-              </h3>
-            </div>
-            <div className="relative">
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={toggleSettings}
-                className="p-2 rounded-full hover:bg-white/20"
-              >
-                <FiMoreVertical className="w-5 h-5" />
-              </motion.button>
-              <AnimatePresence>
-                {showSettings && <SettingsMenu />}
-              </AnimatePresence>
-            </div>
-          </div>
-          <p className={`flex-grow whitespace-pre-wrap ${fontFamilies[fontFamily]} ${fontSizes[fontSize]} ${
-            isBold ? 'font-bold' : ''
-          } ${isItalic ? 'italic' : ''}`}>
-            {content}
-          </p>
-                {images.length > 0 && (
-            <div className="flex flex-wrap gap-2 my-2">
-              {images.map((image, index) => (
-                <img key={index} src={image} alt="" className="w-16 h-16 object-cover rounded-lg" />
-              ))}
-            </div>
-                )}
-          {(tags.length > 0 || labels.length > 0) && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {tags.map((tag, index) => (
-                <span key={`tag-${index}`} className="text-xs bg-white/50 px-1.5 py-0.5 rounded-full">
-                  {tag}
-                  </span>
-              ))}
-              {labels.map((label, index) => (
-                <span key={`label-${index}`} className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
-                  {label}
-                  </span>
-              ))}
-            </div>
-                )}
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4 text-sm text-gray-600">
-              <div className="flex items-center">
-                <FiCalendar className="w-4 h-4 mr-1" />
-                <span>{formatDate(note.updatedAt)}</span>
-          </div>
-              {dueDate && (
-                <div className="flex items-center">
-                  <FiAlertCircle className="w-4 h-4 mr-1" />
-                  <span>{formatDate(dueDate)}</span>
-        </div>
-              )}
-              {reminder && (
-                <div className="flex items-center">
-                  <FiClock className="w-4 h-4 mr-1" />
-                  <span>{formatDate(reminder)}</span>
-      </div>
-              )}
-            </div>
-            <div className="flex space-x-2">
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setIsEditing(true)}
-                className="p-2 rounded-full hover:bg-white/20"
-                disabled={isLocked}
-          >
-                <FiEdit2 className="w-5 h-5" />
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-            onClick={() => onDelete(note.id)}
-                className="p-2 rounded-full hover:bg-white/20"
-                disabled={isLocked}
-          >
-            <FiTrash2 className="w-5 h-5" />
-              </motion.button>
-        </div>
-          </div>
-        </>
-      )}
-      
-      {isEditing && <AttachmentsSection />}
-
-      {/* Mobile Actions */}
-      {!isListView && (
-        <div className="flex sm:hidden items-center gap-2 mt-4">
-          <button
-            onClick={handleBookmark}
-            className={`p-2 rounded-full transition-colors ${
-              isBookmarked ? 'bg-primary/20 text-primary' : 'hover:bg-black/10'
-            }`}
-          >
-            <FiBookmark className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleArchive}
-            className={`p-2 rounded-full transition-colors ${
-              isArchived ? 'bg-gray-200' : 'hover:bg-black/10'
-            }`}
-          >
-            <FiArchive className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => onDelete(note.id)}
-            className="p-2 hover:bg-black/10 rounded-full transition-colors text-red-500"
-          >
-            <FiTrash2 className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-
-      {/* Flag Modal */}
-      <AnimatePresence>
-        {showFlagModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            onClick={() => setShowFlagModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-xl p-6 w-full max-w-md"
-            >
-              <h3 className="text-lg font-semibold mb-4">Flag Note</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Please select a reason for flagging this note. This will be reviewed by administrators.
-              </p>
-              <select
-                value={flagReason}
-                onChange={(e) => setFlagReason(e.target.value)}
-                className="w-full p-3 border border-gray-200 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                <option value="">Select a reason</option>
-                <option value="spam">Spam</option>
-                <option value="inappropriate">Inappropriate Content</option>
-                <option value="offensive">Offensive Content</option>
-                <option value="violence">Violence</option>
-                <option value="harassment">Harassment</option>
-                <option value="other">Other</option>
-              </select>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowFlagModal(false)}
-                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleFlag}
-                  disabled={!flagReason}
-                  className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Submit Flag
-                </button>
-              </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+      <GroupModal />
+    </>
   );
 };
 

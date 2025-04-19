@@ -20,11 +20,11 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const user = await login(email, password);
+      const userData = await login(email, password);
       toast.success('Successfully logged in!');
       
       // Check user role and redirect accordingly
-      if (user.role === ROLES.ADMIN) {
+      if (userData?.role === ROLES.ADMIN) {
         navigate('/admin');
       } else {
         navigate('/dashboard');
@@ -39,11 +39,11 @@ const Login = () => {
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
-      const user = await loginWithGoogle();
+      const userData = await loginWithGoogle();
       toast.success('Successfully logged in with Google!');
       
       // Check user role and redirect accordingly
-      if (user.role === ROLES.ADMIN) {
+      if (userData?.role === ROLES.ADMIN) {
         navigate('/admin');
       } else {
         navigate('/dashboard');

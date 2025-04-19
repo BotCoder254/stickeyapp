@@ -16,6 +16,8 @@ import SharedNote from './components/Notes/SharedNote';
 import AuthLayout from './layouts/AuthLayout';
 import MainLayout from './layouts/MainLayout';
 import AdminLayout from './layouts/AdminLayout';
+import GroupManagement from './components/Admin/GroupManagement';
+import GroupView from './components/Groups/GroupView';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -111,6 +113,16 @@ const App = () => {
               </PrivateRoute>
             }
           />
+          <Route
+            path="/groups"
+            element={
+              <PrivateRoute>
+                <MainLayout>
+                  <GroupView />
+                </MainLayout>
+              </PrivateRoute>
+            }
+          />
 
           {/* Admin Routes */}
           <Route
@@ -168,7 +180,7 @@ const App = () => {
             element={
               <AdminRoute>
                 <AdminLayout>
-                  <AdminDashboard />
+                  <SystemLogs />
                 </AdminLayout>
               </AdminRoute>
             }
@@ -219,6 +231,16 @@ const App = () => {
               <AdminRoute>
                 <AdminLayout>
                   <SystemLogs />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/groups"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <GroupManagement />
                 </AdminLayout>
               </AdminRoute>
             }

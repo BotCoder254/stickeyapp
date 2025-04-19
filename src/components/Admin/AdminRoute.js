@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useRole } from '../../hooks/useRole';
 import { useAuth } from '../../hooks/useAuth';
+import LoadingSpinner from '../LoadingSpinner';
 
 const AdminRoute = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
@@ -9,13 +10,14 @@ const AdminRoute = ({ children }) => {
   if (authLoading || roleLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <LoadingSpinner />
       </div>
     );
   }
 
-  if (!user || !isAdmin) {
-    return <Navigate to="/dashboard" />;
+  if (!user || !user.role || user.role !== 'admin') {
+    console.log('Access denied: User is not an admin', { user });
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;

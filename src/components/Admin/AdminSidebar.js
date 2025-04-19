@@ -37,7 +37,8 @@ const AdminSidebar = ({ isOpen, setIsOpen }) => {
     { icon: FiFileText, label: 'Reports', path: '/admin/reports' },
     { icon: FiDatabase, label: 'Backup & Restore', path: '/admin/backup' },
     { icon: FiSettings, label: 'Settings', path: '/admin/settings' },
-    { icon: FiHelpCircle, label: 'Help Center', path: '/admin/help' }
+    { icon: FiHelpCircle, label: 'Help Center', path: '/admin/help' },
+    { icon: FiUsers, label: 'Groups', path: '/admin/groups' }
   ];
 
   const handleLogout = async () => {

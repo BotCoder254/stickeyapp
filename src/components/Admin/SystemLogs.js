@@ -1,227 +1,186 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, orderBy, limit, startAfter, getDocs, where } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { collection, query, orderBy, limit, startAfter, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { FiSearch, FiFilter, FiChevronDown, FiChevronUp, FiClock, FiRefreshCw } from 'react-icons/fi';
+import { FiRefreshCw, FiSearch } from 'react-icons/fi';
 import LoadingSpinner from '../LoadingSpinner';
 
-const LOGS_PER_PAGE = 20;
+const EVENT_TYPE_COLORS = {
+  login: 'bg-blue-100 text-blue-800',
+  logout: 'bg-gray-100 text-gray-800',
+  error: 'bg-red-100 text-red-800',
+  warning: 'bg-yellow-100 text-yellow-800',
+  admin_action: 'bg-purple-100 text-purple-800',
+  user_action: 'bg-green-100 text-green-800',
+  system: 'bg-indigo-100 text-indigo-800'
+};
 
-const SystemLogs = () => {
+const ITEMS_PER_PAGE = 20;
+
+export default function SystemLogs() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState('timestamp');
-  const [sortDirection, setSortDirection] = useState('desc');
-  const [filterType, setFilterType] = useState('all');
-  const [lastDoc, setLastDoc] = useState(null);
+  const [lastVisible, setLastVisible] = useState(null);
   const [hasMore, setHasMore] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedType, setSelectedType] = useState('all');
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const fetchLogs = async (isInitial = false) => {
+  useEffect(() => {
+    fetchLogs();
+  }, [refreshKey]);
+
+  const fetchLogs = async (startAfterDoc = null) => {
     try {
       setLoading(true);
       let q = query(
         collection(db, 'system_logs'),
-        orderBy(sortField, sortDirection),
-        limit(LOGS_PER_PAGE)
+        orderBy('timestamp', 'desc'),
+        limit(ITEMS_PER_PAGE)
       );
 
-      if (!isInitial && lastDoc) {
-        q = query(q, startAfter(lastDoc));
+      if (startAfterDoc) {
+        q = query(q, startAfter(startAfterDoc));
       }
 
-      if (filterType !== 'all') {
-        q = query(q, where('eventType', '==', filterType));
-      }
-
-      const snapshot = await getDocs(q);
-      const newLogs = snapshot.docs.map(doc => ({
+      const querySnapshot = await getDocs(q);
+      const newLogs = querySnapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate()
       }));
 
-      setHasMore(newLogs.length === LOGS_PER_PAGE);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-
-      if (isInitial) {
-        setLogs(newLogs);
-      } else {
-        setLogs(prev => [...prev, ...newLogs]);
-      }
+      setLogs(prevLogs => startAfterDoc ? [...prevLogs, ...newLogs] : newLogs);
+      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+      setHasMore(querySnapshot.docs.length === ITEMS_PER_PAGE);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching logs:', error);
-    } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchLogs(true);
-  }, [sortField, sortDirection, filterType]);
-
-  const handleSort = (field) => {
-    if (field === sortField) {
-      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('desc');
+  const handleLoadMore = () => {
+    if (lastVisible) {
+      fetchLogs(lastVisible);
     }
+  };
+
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
   };
 
   const filteredLogs = logs.filter(log => {
-    if (!searchQuery) return true;
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      log.eventType.toLowerCase().includes(searchLower) ||
-      log.userId.toLowerCase().includes(searchLower) ||
-      log.description.toLowerCase().includes(searchLower)
-    );
+    const matchesSearch = searchTerm === '' || 
+      Object.values(log).some(value => 
+        String(value).toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    const matchesType = selectedType === 'all' || log.eventType === selectedType;
+    return matchesSearch && matchesType;
   });
-
-  const getEventTypeColor = (eventType) => {
-    switch (eventType.toLowerCase()) {
-      case 'login':
-        return 'bg-green-100 text-green-800';
-      case 'error':
-        return 'bg-red-100 text-red-800';
-      case 'warning':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'admin_action':
-        return 'bg-purple-100 text-purple-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">System Logs</h1>
         <button
-          onClick={() => fetchLogs(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          onClick={handleRefresh}
+          className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
         >
-          <FiRefreshCw className="w-4 h-4" />
+          <FiRefreshCw className="w-4 h-4 mr-2" />
           Refresh
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        {/* Search and Filter Bar */}
-        <div className="p-4 border-b border-gray-200 flex flex-wrap gap-4">
-          <div className="flex-1 min-w-[200px]">
-            <div className="relative">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search logs..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
-              />
-            </div>
-          </div>
-          <div className="relative">
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="appearance-none pl-4 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
-            >
-              <option value="all">All Events</option>
-              <option value="login">Login Events</option>
-              <option value="error">Errors</option>
-              <option value="warning">Warnings</option>
-              <option value="admin_action">Admin Actions</option>
-            </select>
-            <FiChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          </div>
+      <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search logs..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+          />
         </div>
+        <select
+          value={selectedType}
+          onChange={(e) => setSelectedType(e.target.value)}
+          className="px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="all">All Events</option>
+          {Object.keys(EVENT_TYPE_COLORS).map(type => (
+            <option key={type} value={type}>
+              {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        {/* Logs Table */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('timestamp')}
-                >
-                  <div className="flex items-center gap-2">
-                    Timestamp
-                    {sortField === 'timestamp' && (
-                      sortDirection === 'desc' ? <FiChevronDown /> : <FiChevronUp />
-                    )}
-                  </div>
-                </th>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('eventType')}
-                >
-                  <div className="flex items-center gap-2">
-                    Event Type
-                    {sortField === 'eventType' && (
-                      sortDirection === 'desc' ? <FiChevronDown /> : <FiChevronUp />
-                    )}
-                  </div>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Timestamp
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Description
+                  Event Type
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   User ID
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Description
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {loading && logs.length === 0 ? (
-                <tr>
-                  <td colSpan="4" className="px-6 py-4 text-center">
-                    <LoadingSpinner />
+              {filteredLogs.map((log) => (
+                <tr key={log.id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {log.timestamp?.toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${EVENT_TYPE_COLORS[log.eventType]}`}>
+                      {log.eventType}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {log.userId || 'System'}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {log.description}
                   </td>
                 </tr>
-              ) : (
-                filteredLogs.map((log) => (
-                  <motion.tr
-                    key={log.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(log.timestamp?.toDate()).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getEventTypeColor(log.eventType)}`}>
-                        {log.eventType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {log.description}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {log.userId}
-                    </td>
-                  </motion.tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
-
-        {/* Load More Button */}
-        {hasMore && !loading && (
-          <div className="p-4 border-t border-gray-200">
-            <button
-              onClick={() => fetchLogs(false)}
-              className="w-full py-2 text-sm text-primary hover:text-secondary"
-            >
-              Load More
-            </button>
-          </div>
-        )}
       </div>
+
+      {loading && (
+        <div className="flex justify-center my-4">
+          <LoadingSpinner />
+        </div>
+      )}
+
+      {!loading && hasMore && (
+        <div className="flex justify-center mt-4">
+          <button
+            onClick={handleLoadMore}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Load More
+          </button>
+        </div>
+      )}
+
+      {!loading && filteredLogs.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          No logs found matching your criteria
+        </div>
+      )}
     </div>
   );
-};
-
-export default SystemLogs; 
+}
