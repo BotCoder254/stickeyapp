@@ -4,6 +4,7 @@ import { FiMail, FiLock, FiLoader } from 'react-icons/fi';
 import { FcGoogle } from 'react-icons/fc';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useRole } from '../hooks/useRole';
 import toast from 'react-hot-toast';
 
 const Login = () => {
@@ -11,6 +12,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, loginWithGoogle } = useAuth();
+  const { ROLES } = useRole();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -18,9 +20,15 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
+      const user = await login(email, password);
       toast.success('Successfully logged in!');
-      navigate('/dashboard');
+      
+      // Check user role and redirect accordingly
+      if (user.role === ROLES.ADMIN) {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -31,9 +39,15 @@ const Login = () => {
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
-      await loginWithGoogle();
+      const user = await loginWithGoogle();
       toast.success('Successfully logged in with Google!');
-      navigate('/dashboard');
+      
+      // Check user role and redirect accordingly
+      if (user.role === ROLES.ADMIN) {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       toast.error(err.message);
     } finally {

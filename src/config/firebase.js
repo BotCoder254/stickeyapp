@@ -15,10 +15,23 @@ const firebaseConfig = {
   measurementId: "G-0WGJF9H0EL"
 };
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-export const analytics = getAnalytics(app);
+let auth;
+let db;
+let storage;
+let analytics;
+let app;
 
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  auth.useDeviceLanguage();
+  db = getFirestore(app);
+  storage = getStorage(app);
+  analytics = getAnalytics(app);
+} catch (error) {
+  console.error('Error initializing Firebase:', error);
+  throw error;
+}
+
+export { auth, db, storage, analytics };
 export default app; 
