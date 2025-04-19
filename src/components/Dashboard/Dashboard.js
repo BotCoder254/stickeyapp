@@ -168,6 +168,33 @@ const Dashboard = () => {
     }
   };
 
+  const handleDuplicateNote = async (note) => {
+    try {
+      const duplicatedNote = {
+        ...note,
+        id: undefined,
+        title: `${note.title} (Copy)`,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      delete duplicatedNote.id;
+      await addDoc(collection(db, 'notes'), duplicatedNote);
+    } catch (error) {
+      console.error('Error duplicating note:', error);
+    }
+  };
+
+  const handleShareNote = async (note) => {
+    try {
+      // Create a shareable link or copy note content to clipboard
+      const noteContent = `${note.title}\n\n${note.content}`;
+      await navigator.clipboard.writeText(noteContent);
+      alert('Note content copied to clipboard!');
+    } catch (error) {
+      console.error('Error sharing note:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -323,6 +350,8 @@ const Dashboard = () => {
                   onUpdate={handleUpdateNote}
                   onDelete={handleDeleteNote}
                   onArchive={handleArchiveNote}
+                  onDuplicate={handleDuplicateNote}
+                  onShare={handleShareNote}
                   isListView={viewMode === 'list'}
                 />
               </motion.div>
