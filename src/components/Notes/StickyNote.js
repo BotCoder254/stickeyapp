@@ -52,7 +52,7 @@ const AudioWaveform = ({ isRecording }) => {
   );
 };
 
-const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare, onFileUpload, onDeleteFile, onAudioRecord, isListView = false, index }) => {
+const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare, onFileUpload, onDeleteFile, onAudioRecord, onBookmark, isListView = false, index }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [title, setTitle] = useState(note.title);
@@ -301,6 +301,11 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
       audio.play();
       setIsPlaying(prev => ({ ...prev, [audioUrl]: true }));
     }
+  };
+
+  const handleBookmark = () => {
+    setShowSettings(false);
+    onBookmark(note);
   };
 
   const SettingsMenu = () => (
@@ -761,39 +766,39 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
       {isEditing ? (
         <>
           <div className="flex items-center gap-2 mb-2">
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
               onKeyDown={handleKeyDown}
               className={`flex-grow bg-transparent border-b border-gray-600 px-2 py-1 focus:outline-none focus:border-primary ${
                 fontFamilies[fontFamily]
               } ${fontSizes[fontSize]} ${isBold ? 'font-bold' : ''} ${isItalic ? 'italic' : ''}`}
-              placeholder="Title"
-            />
+            placeholder="Title"
+          />
             <div className="relative">
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={toggleSettings}
                 className="p-2 rounded-full hover:bg-white/20"
-              >
-                <FiMoreVertical className="w-5 h-5" />
+            >
+              <FiMoreVertical className="w-5 h-5" />
               </motion.button>
               <AnimatePresence>
                 {showSettings && <SettingsMenu />}
               </AnimatePresence>
-            </div>
           </div>
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
+        </div>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
             className={`bg-transparent flex-grow resize-none mb-4 px-2 py-1 focus:outline-none ${
               fontFamilies[fontFamily]
             } ${fontSizes[fontSize]} ${isBold ? 'font-bold' : ''} ${isItalic ? 'italic' : ''}`}
             placeholder="Write your note here... Use #tags for organization"
-          />
+        />
           {images.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
               {images.map((image, index) => (
@@ -814,7 +819,7 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
               <div className="flex items-center">
                 <FiHash className="w-4 h-4 mr-1" />
                 <span>{tags.length}</span>
-              </div>
+                </div>
               <div className="flex items-center">
                 <FiPaperclip className="w-4 h-4 mr-1" />
                 <span>{charCount}</span>
@@ -823,8 +828,8 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                 <div className="flex items-center">
                   <FiClock className="w-4 h-4 mr-1" />
                   <span>{formatDate(reminder)}</span>
-                </div>
-              )}
+            </div>
+          )}
             </div>
             <div className="flex space-x-2">
               <motion.button
@@ -832,7 +837,7 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                 whileTap={{ scale: 0.9 }}
                 onClick={handleSave}
                 className="p-2 rounded-full hover:bg-white/20"
-              >
+                  >
                 <FiCheck className="w-5 h-5" />
               </motion.button>
               <motion.button
@@ -840,11 +845,11 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                 whileTap={{ scale: 0.9 }}
                 onClick={handleCancel}
                 className="p-2 rounded-full hover:bg-white/20"
-              >
+                  >
                 <FiX className="w-5 h-5" />
               </motion.button>
+                </div>
             </div>
-          </div>
         </>
       ) : (
         <>
@@ -859,10 +864,10 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                 }`}>
                   {priority}
                 </span>
-              )}
+          )}
               <h3 className={`font-bold text-lg ${fontFamilies[fontFamily]} ${isBold ? 'font-bold' : ''} ${
                 isItalic ? 'italic' : ''
-              }`}>
+        }`}>
                 {title}
               </h3>
             </div>
@@ -885,44 +890,44 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
           } ${isItalic ? 'italic' : ''}`}>
             {content}
           </p>
-          {images.length > 0 && (
+                {images.length > 0 && (
             <div className="flex flex-wrap gap-2 my-2">
               {images.map((image, index) => (
                 <img key={index} src={image} alt="" className="w-16 h-16 object-cover rounded-lg" />
               ))}
             </div>
-          )}
+                )}
           {(tags.length > 0 || labels.length > 0) && (
             <div className="flex flex-wrap gap-1 mb-2">
               {tags.map((tag, index) => (
                 <span key={`tag-${index}`} className="text-xs bg-white/50 px-1.5 py-0.5 rounded-full">
                   {tag}
-                </span>
+                  </span>
               ))}
               {labels.map((label, index) => (
                 <span key={`label-${index}`} className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
                   {label}
-                </span>
+                  </span>
               ))}
             </div>
-          )}
+                )}
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4 text-sm text-gray-600">
               <div className="flex items-center">
                 <FiCalendar className="w-4 h-4 mr-1" />
                 <span>{formatDate(note.updatedAt)}</span>
-              </div>
+          </div>
               {dueDate && (
                 <div className="flex items-center">
                   <FiAlertCircle className="w-4 h-4 mr-1" />
                   <span>{formatDate(dueDate)}</span>
-                </div>
+        </div>
               )}
               {reminder && (
                 <div className="flex items-center">
                   <FiClock className="w-4 h-4 mr-1" />
                   <span>{formatDate(reminder)}</span>
-                </div>
+      </div>
               )}
             </div>
             <div className="flex space-x-2">
@@ -932,24 +937,52 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                 onClick={() => setIsEditing(true)}
                 className="p-2 rounded-full hover:bg-white/20"
                 disabled={isLocked}
-              >
+          >
                 <FiEdit2 className="w-5 h-5" />
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
-                onClick={() => onDelete(note.id)}
+            onClick={() => onDelete(note.id)}
                 className="p-2 rounded-full hover:bg-white/20"
                 disabled={isLocked}
-              >
-                <FiTrash2 className="w-5 h-5" />
+          >
+            <FiTrash2 className="w-5 h-5" />
               </motion.button>
-            </div>
+        </div>
           </div>
         </>
       )}
       
       {isEditing && <AttachmentsSection />}
+
+      {/* Mobile Actions */}
+      {!isListView && (
+        <div className="flex sm:hidden items-center gap-2 mt-4">
+          <button
+            onClick={handleBookmark}
+            className={`p-2 rounded-full transition-colors ${
+              isBookmarked ? 'bg-primary/20 text-primary' : 'hover:bg-black/10'
+            }`}
+          >
+            <FiBookmark className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleArchive}
+            className={`p-2 rounded-full transition-colors ${
+              isArchived ? 'bg-gray-200' : 'hover:bg-black/10'
+            }`}
+          >
+            <FiArchive className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => onDelete(note.id)}
+            className="p-2 hover:bg-black/10 rounded-full transition-colors text-red-500"
+          >
+            <FiTrash2 className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 };
