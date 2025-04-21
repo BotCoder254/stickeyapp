@@ -4,6 +4,8 @@ import { collection, query, getDocs, updateDoc, deleteDoc, doc, addDoc } from 'f
 import { db } from '../../config/firebase';
 import { FiEdit2, FiTrash2, FiUserPlus, FiX, FiCheck, FiBan } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
+import LoadingSpinner from '../LoadingSpinner';
+import { useRole } from '../../hooks/useRole';
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -16,6 +18,7 @@ const UserManagement = () => {
     role: 'user',
     status: 'active'
   });
+  const { ROLES, getRoleLabel } = useRole();
 
   useEffect(() => {
     fetchUsers();
@@ -23,16 +26,20 @@ const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
+      setLoading(true);
       const usersRef = collection(db, 'users');
       const snapshot = await getDocs(usersRef);
-      const userData = snapshot.docs.map(doc => ({
+      const usersData = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+        lastLogin: doc.data().lastLogin?.toDate?.() || null
       }));
-      setUsers(userData);
-      setLoading(false);
+      setUsers(usersData);
     } catch (error) {
       console.error('Error fetching users:', error);
+      toast.error('Failed to fetch users');
+    } finally {
       setLoading(false);
     }
   };
@@ -69,9 +76,11 @@ const UserManagement = () => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
         await deleteDoc(doc(db, 'users', userId));
-        fetchUsers();
+        setUsers(users.filter(user => user.id !== userId));
+        toast.success('User deleted successfully');
       } catch (error) {
         console.error('Error deleting user:', error);
+        toast.error('Failed to delete user');
       }
     }
   };
@@ -105,93 +114,99 @@ const UserManagement = () => {
     }
   };
 
+  const formatDate = (date) => {
+    if (!date) return 'Never';
+    return new Date(date).toLocaleString();
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
         <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={openAddModal}
-          className="flex items-center px-4 py-2 bg-primary text-white rounded-lg shadow hover:bg-secondary"
+          className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
         >
-          <FiUserPlus className="mr-2" />
+          <FiUserPlus className="w-5 h-5 mr-2" />
           Add User
         </motion.button>
       </div>
 
       {loading ? (
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          <LoadingSpinner />
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Email
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Role
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Created At
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user) => (
-                <motion.tr
-                  key={user.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{user.email}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-                    }`}>
-                      {user.role || 'user'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      getStatusColor(user.status)
-                    }`}>
-                      {user.status || 'active'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.createdAt?.toDate().toLocaleDateString() || 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => openEditModal(user)}
-                      className="text-indigo-600 hover:text-indigo-900 mr-4"
-                    >
-                      <FiEdit2 className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      <FiTrash2 className="w-5 h-5" />
-                    </button>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Role
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created At
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Last Login
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {users.map((user) => (
+                  <tr key={user.id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{user.email}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        user.role === ROLES.ADMIN
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {getRoleLabel(user.role)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(user.createdAt)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(user.lastLogin)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="flex space-x-2">
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => openEditModal(user)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
+                          <FiEdit2 className="w-5 h-5" />
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <FiTrash2 className="w-5 h-5" />
+                        </motion.button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

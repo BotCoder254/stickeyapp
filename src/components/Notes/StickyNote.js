@@ -100,6 +100,7 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
   const [loading, setLoading] = useState(false);
   const [currentGroup, setCurrentGroup] = useState(null);
   const { user } = useAuth();
+  const isFlagged = note.flags && note.flags.length > 0;
 
   useEffect(() => {
     const extractedTags = content.match(/#\w+/g) || [];
@@ -248,6 +249,10 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
   };
 
   const handleSave = () => {
+    if (isFlagged) {
+      toast.error('Cannot edit a flagged note');
+      return;
+    }
     const updatedNote = {
       ...note,
       title,
@@ -434,6 +439,10 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
   };
 
   const handleColorChange = (newColor) => {
+    if (isFlagged) {
+      toast.error('Cannot modify a flagged note');
+      return;
+    }
     setColor(newColor);
     const updatedNote = {
       ...note,
@@ -997,8 +1006,8 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsEditing(true)}
-              className="p-2 rounded-full hover:bg-white/20"
-              disabled={isLocked}
+              className={`p-2 rounded-full hover:bg-white/20 ${isFlagged ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isLocked || isFlagged}
             >
               <FiEdit2 className="w-5 h-5" />
             </motion.button>
@@ -1022,8 +1031,8 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => onDelete(note.id)}
-              className="p-2 rounded-full hover:bg-white/20"
-              disabled={isLocked}
+              className={`p-2 rounded-full hover:bg-white/20 ${isFlagged ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isLocked || isFlagged}
             >
               <FiTrash2 className="w-5 h-5" />
             </motion.button>
@@ -1045,6 +1054,12 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
           isPinned ? 'ring-2 ring-primary' : ''
         } ${note.isArchived ? 'opacity-75' : ''}`}
       >
+        {isFlagged && (
+          <div className="absolute top-2 right-2 bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs flex items-center">
+            <FiFlag className="w-3 h-3 mr-1" />
+            Flagged
+          </div>
+        )}
         {isEditing ? (
           <>
             <div className="flex items-center gap-2 mb-2">
@@ -1063,7 +1078,8 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   onClick={toggleSettings}
-                  className="p-2 rounded-full hover:bg-white/20"
+                  className={`p-2 rounded-full hover:bg-white/20 ${isFlagged ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={isFlagged}
                 >
                   <FiMoreVertical className="w-5 h-5" />
                 </motion.button>
@@ -1158,7 +1174,8 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   onClick={toggleSettings}
-                  className="p-2 rounded-full hover:bg-white/20"
+                  className={`p-2 rounded-full hover:bg-white/20 ${isFlagged ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={isFlagged}
                 >
                   <FiMoreVertical className="w-5 h-5" />
                 </motion.button>
@@ -1223,8 +1240,8 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   onClick={() => setIsEditing(true)}
-                  className="p-2 rounded-full hover:bg-white/20"
-                  disabled={isLocked}
+                  className={`p-2 rounded-full hover:bg-white/20 ${isFlagged ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={isLocked || isFlagged}
                 >
                   <FiEdit2 className="w-5 h-5" />
                 </motion.button>
@@ -1232,8 +1249,8 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   onClick={() => onDelete(note.id)}
-                  className="p-2 rounded-full hover:bg-white/20"
-                  disabled={isLocked}
+                  className={`p-2 rounded-full hover:bg-white/20 ${isFlagged ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={isLocked || isFlagged}
                 >
                   <FiTrash2 className="w-5 h-5" />
                 </motion.button>
