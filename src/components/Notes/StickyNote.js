@@ -248,7 +248,7 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
   };
 
   const handleSave = () => {
-    onUpdate({
+    const updatedNote = {
       ...note,
       title,
       content,
@@ -268,7 +268,9 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
       isItalic,
       updatedAt: new Date(),
       order: index
-    });
+    };
+
+    onUpdate(updatedNote);
     setIsEditing(false);
     setShowSettings(false);
   };
@@ -431,6 +433,16 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
     toast.success('Note has been flagged for review');
   };
 
+  const handleColorChange = (newColor) => {
+    setColor(newColor);
+    const updatedNote = {
+      ...note,
+      color: newColor,
+      updatedAt: new Date()
+    };
+    onUpdate(updatedNote);
+  };
+
   const SettingsMenu = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 3;
@@ -569,7 +581,7 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                         key={colorOption}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => setColor(colorOption)}
+                        onClick={() => handleColorChange(colorOption)}
                         className={`w-8 h-8 rounded-lg ${colorClasses[colorOption]} ${
                           color === colorOption ? 'ring-2 ring-gray-600' : ''
                         }`}
