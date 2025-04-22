@@ -17,7 +17,8 @@ import {
   FiFileText,
   FiDatabase,
   FiList,
-  FiLogOut
+  FiLogOut,
+  FiClock
 } from 'react-icons/fi';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
@@ -34,6 +35,7 @@ const AdminSidebar = ({ isOpen, setIsOpen }) => {
     { icon: FiFlag, label: 'Flagged Notes', path: '/admin/flagged' },
     { icon: FiShield, label: 'Content Moderation', path: '/admin/moderation' },
     { icon: FiList, label: 'System Logs', path: '/admin/system-logs' },
+    { icon: FiClock, label: 'Version History', path: '/admin/version-history' },
     { icon: FiFileText, label: 'Reports', path: '/admin/reports' },
     { icon: FiDatabase, label: 'Backup & Restore', path: '/admin/backup' },
     { icon: FiSettings, label: 'Settings', path: '/admin/settings' },

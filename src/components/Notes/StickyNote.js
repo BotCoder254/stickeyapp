@@ -8,6 +8,7 @@ import { db } from '../../config/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import LoadingSpinner from '../LoadingSpinner';
+import { saveVersion, getVersionHistory, restoreVersion } from '../../utils/versionHistory';
 
 const colorClasses = {
   yellow: 'bg-yellow-200',
@@ -101,6 +102,9 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
   const [currentGroup, setCurrentGroup] = useState(null);
   const { user } = useAuth();
   const isFlagged = note.flags && note.flags.length > 0;
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [versions, setVersions] = useState([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
 
   useEffect(() => {
     const extractedTags = content.match(/#\w+/g) || [];
@@ -248,36 +252,80 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
     setShowSettings(!showSettings);
   };
 
-  const handleSave = () => {
-    if (isFlagged) {
-      toast.error('Cannot edit a flagged note');
+  const handleViewVersionHistory = async () => {
+    try {
+      setLoadingVersions(true);
+      const history = await getVersionHistory(note.id);
+      setVersions(history);
+      setShowVersionHistory(true);
+    } catch (error) {
+      console.error('Error fetching version history:', error);
+      toast.error('Failed to fetch version history');
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
+
+  const handleRestoreVersion = async (version) => {
+    try {
+      setLoading(true);
+      const updatedNote = {
+        ...note,
+        title: version.title,
+        content: version.content,
+        color: version.color,
+        lastModified: new Date()
+      };
+      await onUpdate(note.id, updatedNote);
+      setTitle(version.title);
+      setContent(version.content);
+      setColor(version.color);
+      setShowVersionHistory(false);
+      toast.success('Version restored successfully');
+    } catch (error) {
+      console.error('Error restoring version:', error);
+      toast.error('Failed to restore version');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (isLocked || isFlagged) {
+      toast.error('Cannot edit a locked or flagged note');
       return;
     }
-    const updatedNote = {
-      ...note,
-      title,
-      content,
-      color,
-      isPinned,
-      isLocked,
-      priority,
-      dueDate,
-      images,
-      isArchived,
-      isBookmarked,
-      labels,
-      reminder,
-      fontFamily,
-      fontSize,
-      isBold,
-      isItalic,
-      updatedAt: new Date(),
-      order: index
-    };
 
-    onUpdate(updatedNote);
-    setIsEditing(false);
-    setShowSettings(false);
+    try {
+      setLoading(true);
+      // Save the current version before updating
+      await saveVersion(note.id, {
+        title,
+        content,
+        color,
+        lastModified: new Date()
+      }, user.uid);
+
+      const updatedNote = {
+        title,
+        content,
+        color,
+        lastModified: new Date(),
+        fontFamily,
+        fontSize,
+        isBold,
+        isItalic
+      };
+
+      await onUpdate(note.id, updatedNote);
+      setIsEditing(false);
+      toast.success('Note updated successfully');
+    } catch (error) {
+      console.error('Error updating note:', error);
+      toast.error('Failed to update note');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancel = () => {
@@ -460,95 +508,95 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
     const renderSettingsPage = () => {
       switch (currentPage) {
         case 1:
-          return (
+      return (
             <>
-              {/* Text Styling */}
-              <div className="space-y-3">
-                <span className="text-sm font-medium block">Text Style</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={fontFamily}
-                    onChange={(e) => setFontFamily(e.target.value)}
-                    className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-                  >
-                    <option value="sans">Sans-serif</option>
-                    <option value="serif">Serif</option>
-                    <option value="mono">Monospace</option>
-                    <option value="cursive">Cursive</option>
-                    <option value="handwritten">Handwritten</option>
-                  </select>
-                  <select
-                    value={fontSize}
-                    onChange={(e) => setFontSize(e.target.value)}
-                    className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-                  >
-                    <option value="sm">Small</option>
-                    <option value="base">Normal</option>
-                    <option value="lg">Large</option>
-                    <option value="xl">Extra Large</option>
-                  </select>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setIsBold(!isBold)}
-                    className={`px-3 py-1.5 rounded-lg text-sm ${
-                      isBold ? 'bg-primary/10 text-primary' : 'bg-gray-50 hover:bg-gray-100'
-                    }`}
-                  >
-                    Bold
-                  </button>
-                  <button
-                    onClick={() => setIsItalic(!isItalic)}
-                    className={`px-3 py-1.5 rounded-lg text-sm ${
-                      isItalic ? 'bg-primary/10 text-primary' : 'bg-gray-50 hover:bg-gray-100'
-                    }`}
-                  >
-                    Italic
-                  </button>
-                </div>
-              </div>
+          {/* Text Styling */}
+          <div className="space-y-3">
+            <span className="text-sm font-medium block">Text Style</span>
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                value={fontFamily}
+                onChange={(e) => setFontFamily(e.target.value)}
+                className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+              >
+                <option value="sans">Sans-serif</option>
+                <option value="serif">Serif</option>
+                <option value="mono">Monospace</option>
+                <option value="cursive">Cursive</option>
+                <option value="handwritten">Handwritten</option>
+              </select>
+              <select
+                value={fontSize}
+                onChange={(e) => setFontSize(e.target.value)}
+                className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+              >
+                <option value="sm">Small</option>
+                <option value="base">Normal</option>
+                <option value="lg">Large</option>
+                <option value="xl">Extra Large</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsBold(!isBold)}
+                className={`px-3 py-1.5 rounded-lg text-sm ${
+                  isBold ? 'bg-primary/10 text-primary' : 'bg-gray-50 hover:bg-gray-100'
+                }`}
+              >
+                Bold
+              </button>
+              <button
+                onClick={() => setIsItalic(!isItalic)}
+                className={`px-3 py-1.5 rounded-lg text-sm ${
+                  isItalic ? 'bg-primary/10 text-primary' : 'bg-gray-50 hover:bg-gray-100'
+                }`}
+              >
+                Italic
+              </button>
+            </div>
+          </div>
 
-              {/* Quick Actions */}
-              <div className="border-t border-gray-100 pt-3">
-                <div className="flex flex-wrap gap-2">
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setIsPinned(!isPinned)}
-                    className={`p-2 rounded-lg flex items-center gap-2 ${
-                      isPinned ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    <FiStar className="w-4 h-4" />
-                    <span className="text-sm">Pin</span>
-                  </motion.button>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setIsBookmarked(!isBookmarked)}
-                    className={`p-2 rounded-lg flex items-center gap-2 ${
-                      isBookmarked ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    <FiBookmark className="w-4 h-4" />
-                    <span className="text-sm">Bookmark</span>
-                  </motion.button>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setIsLocked(!isLocked)}
-                    className={`p-2 rounded-lg flex items-center gap-2 ${
-                      isLocked ? 'bg-gray-100 text-gray-600' : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    <FiLock className="w-4 h-4" />
-                    <span className="text-sm">Lock</span>
-                  </motion.button>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowFlagModal(true)}
-                    className="p-2 rounded-lg flex items-center gap-2 text-red-600 hover:bg-red-50"
-                  >
-                    <FiFlag className="w-4 h-4" />
-                    <span className="text-sm">Flag</span>
-                  </motion.button>
+          {/* Quick Actions */}
+          <div className="border-t border-gray-100 pt-3">
+            <div className="flex flex-wrap gap-2">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsPinned(!isPinned)}
+                className={`p-2 rounded-lg flex items-center gap-2 ${
+                  isPinned ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
+                }`}
+              >
+                <FiStar className="w-4 h-4" />
+                <span className="text-sm">Pin</span>
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsBookmarked(!isBookmarked)}
+                className={`p-2 rounded-lg flex items-center gap-2 ${
+                  isBookmarked ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
+                }`}
+              >
+                <FiBookmark className="w-4 h-4" />
+                <span className="text-sm">Bookmark</span>
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsLocked(!isLocked)}
+                className={`p-2 rounded-lg flex items-center gap-2 ${
+                  isLocked ? 'bg-gray-100 text-gray-600' : 'hover:bg-gray-100'
+                }`}
+              >
+                <FiLock className="w-4 h-4" />
+                <span className="text-sm">Lock</span>
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowFlagModal(true)}
+                className="p-2 rounded-lg flex items-center gap-2 text-red-600 hover:bg-red-50"
+              >
+                <FiFlag className="w-4 h-4" />
+                <span className="text-sm">Flag</span>
+              </motion.button>
                 </div>
               </div>
             </>
@@ -586,10 +634,10 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                   <span className="text-sm font-medium block mb-2">Color</span>
                   <div className="grid grid-cols-5 gap-2">
                     {Object.keys(colorClasses).map((colorOption) => (
-                      <motion.button
+              <motion.button
                         key={colorOption}
                         whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.95 }}
+                whileTap={{ scale: 0.95 }}
                         onClick={() => handleColorChange(colorOption)}
                         className={`w-8 h-8 rounded-lg ${colorClasses[colorOption]} ${
                           color === colorOption ? 'ring-2 ring-gray-600' : ''
@@ -670,16 +718,16 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                         const time = prompt('Set reminder (minutes):', '5');
                         if (time) setReminder(new Date(Date.now() + parseInt(time) * 60000));
                       }}
-                      className="p-2 rounded-lg flex items-center gap-2 hover:bg-gray-100"
-                    >
+                className="p-2 rounded-lg flex items-center gap-2 hover:bg-gray-100"
+              >
                       <FiClock className="w-4 h-4" />
                       <span className="text-sm">Reminder</span>
-                    </motion.button>
-                  </div>
-                </div>
-              </div>
+              </motion.button>
+            </div>
+          </div>
+        </div>
             </>
-          );
+      );
         case 4:
           return <AttachmentsSection />;
         default:
@@ -740,6 +788,17 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Version History */}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={handleViewVersionHistory}
+              className="flex items-center space-x-2 text-gray-700 hover:text-gray-900"
+            >
+              <FiClock className="w-4 h-4" />
+              <span>Version History</span>
+            </button>
           </div>
         </div>
       </motion.div>
@@ -940,6 +999,62 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
                 className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
               >
                 Cancel
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const VersionHistory = ({ noteId, isOpen, onClose, onVersionRestore }) => (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+          >
+            <h3 className="text-lg font-semibold mb-4">Version History</h3>
+            {loadingVersions ? (
+              <div className="flex justify-center py-4">
+                <LoadingSpinner />
+              </div>
+            ) : versions.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">
+                No version history available
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {versions.map(version => (
+                  <button
+                    key={version.id}
+                    onClick={() => onVersionRestore(version)}
+                    className="w-full p-3 text-left rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <div className="font-medium">{version.title}</div>
+                    <div className="text-sm text-gray-500">
+                      {formatDate(version.lastModified)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
+              >
+                Close
               </button>
             </div>
           </motion.div>
@@ -1344,6 +1459,12 @@ const StickyNote = ({ note, onUpdate, onDelete, onArchive, onDuplicate, onShare,
         </AnimatePresence>
       </motion.div>
       <GroupModal />
+      <VersionHistory
+        noteId={note.id}
+        isOpen={showVersionHistory}
+        onClose={() => setShowVersionHistory(false)}
+        onVersionRestore={handleRestoreVersion}
+      />
     </>
   );
 };

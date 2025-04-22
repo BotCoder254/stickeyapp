@@ -18,6 +18,7 @@ import MainLayout from './layouts/MainLayout';
 import AdminLayout from './layouts/AdminLayout';
 import GroupManagement from './components/Admin/GroupManagement';
 import GroupView from './components/Groups/GroupView';
+import VersionHistoryManagement from './components/Admin/VersionHistoryManagement';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -241,6 +242,16 @@ const App = () => {
               <AdminRoute>
                 <AdminLayout>
                   <GroupManagement />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/version-history"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <VersionHistoryManagement />
                 </AdminLayout>
               </AdminRoute>
             }
