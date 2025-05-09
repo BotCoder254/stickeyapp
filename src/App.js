@@ -5,6 +5,7 @@ import Login from './components/Login';
 import SignUp from './components/SignUp';
 import ResetPassword from './components/ResetPassword';
 import Dashboard from './components/Dashboard/Dashboard';
+import Analytics from './components/Dashboard/Analytics';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import UserManagement from './components/Admin/UserManagement';
 import FlaggedNotes from './components/Admin/FlaggedNotes';
@@ -16,6 +17,7 @@ import SharedNote from './components/Notes/SharedNote';
 import AuthLayout from './layouts/AuthLayout';
 import MainLayout from './layouts/MainLayout';
 import AdminLayout from './layouts/AdminLayout';
+import UserLayout from './layouts/UserLayout';
 import GroupManagement from './components/Admin/GroupManagement';
 import GroupView from './components/Groups/GroupView';
 import VersionHistoryManagement from './components/Admin/VersionHistoryManagement';
@@ -108,9 +110,19 @@ const App = () => {
             path="/dashboard"
             element={
               <PrivateRoute>
-                <MainLayout>
+                <UserLayout>
                   <Dashboard />
-                </MainLayout>
+                </UserLayout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/analytics"
+            element={
+              <PrivateRoute>
+                <UserLayout>
+                  <Analytics />
+                </UserLayout>
               </PrivateRoute>
             }
           />
@@ -118,9 +130,9 @@ const App = () => {
             path="/groups"
             element={
               <PrivateRoute>
-                <MainLayout>
+                <UserLayout>
                   <GroupView />
-                </MainLayout>
+                </UserLayout>
               </PrivateRoute>
             }
           />
@@ -147,16 +159,6 @@ const App = () => {
             }
           />
           <Route
-            path="/admin/analytics"
-            element={
-              <AdminRoute>
-                <AdminLayout>
-                  <AdminDashboard />
-                </AdminLayout>
-              </AdminRoute>
-            }
-          />
-          <Route
             path="/admin/flagged"
             element={
               <AdminRoute>
@@ -172,46 +174,6 @@ const App = () => {
               <AdminRoute>
                 <AdminLayout>
                   <ContentModeration />
-                </AdminLayout>
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/logs"
-            element={
-              <AdminRoute>
-                <AdminLayout>
-                  <SystemLogs />
-                </AdminLayout>
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/reports"
-            element={
-              <AdminRoute>
-                <AdminLayout>
-                  <AdminDashboard />
-                </AdminLayout>
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/settings"
-            element={
-              <AdminRoute>
-                <AdminLayout>
-                  <AdminDashboard />
-                </AdminLayout>
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/help"
-            element={
-              <AdminRoute>
-                <AdminLayout>
-                  <AdminDashboard />
                 </AdminLayout>
               </AdminRoute>
             }
